@@ -1,5 +1,8 @@
 package interpreter;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
@@ -7,6 +10,16 @@ import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
+
+        final String file = "code.smg";
+
+        String code = null;
+        try {
+            code = String.join("\n", Files.readAllLines(Paths.get(file)));
+        } catch (IOException e) {
+
+        }
+
         final List<List<Object>> expressions = List.of(
 
             List.of("true", true),
@@ -55,7 +68,10 @@ public class Main {
             List.of("0", ERROR),
             List.of("SMG", ERROR),
             List.of("1 + 2", ERROR),
-            List.of("Active", true)
+            List.of("Active", true),
+
+            // Code from file
+            List.of(code, true)
         );
 
         final Map<String, Object> vars = Map.of(
@@ -85,7 +101,11 @@ public class Main {
             }
 
             count += success ? 1 : 0;
-            System.out.println(String.format("Test %2d: %s -> %s", ++index, expression, (success ? green("PASS") : red("FAIL"))));
+            System.out.println(String.format("Test %2d: %s -> %s", 
+                ++index, 
+                expression == code ? "[Code from file: " + file + "]" : expression,
+                (success ? green("PASS") : red("FAIL"))
+            ));
         }
         final String marks = String.format("%d/%d", count, expressions.size());
         System.out.println("Total: " + (count == expressions.size() ? green(marks) : red(marks)));

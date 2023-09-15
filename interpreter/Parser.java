@@ -74,7 +74,7 @@ public class Parser {
     public boolean interpret() {
         if (root == null)
             parse();
-        return this.answer | interpret(root);
+        return this.answer | interpretBexpr(root);
     }
 
     /**
@@ -85,21 +85,16 @@ public class Parser {
      * which would normally produce an error if 'x' cannot be evaluated as a boolean would actually evaluate to true.
      * This can be beneficial but potentially hard to debug.
      */
-    private boolean interpret(NodeBExpr node) {
+    private boolean interpretBexpr(NodeBExpr node) {
         // Top level boolean arithmetic
         if (node instanceof NodeBExprAnd) {
-            return interpret(((NodeBExprAnd) node).lhs) && interpret(((NodeBExprAnd) node).rhs);
+            return interpretBexpr(((NodeBExprAnd) node).lhs) && interpretBexpr(((NodeBExprAnd) node).rhs);
         } else if (node instanceof NodeBExprOr) {
-            return interpret(((NodeBExprOr) node).lhs) || interpret(((NodeBExprOr) node).rhs);
+            return interpretBexpr(((NodeBExprOr) node).lhs) || interpretBexpr(((NodeBExprOr) node).rhs);
         } else if (node instanceof NodeBExprNot) {
-            return !interpret(((NodeBExprNot) node).val);
-        } 
-        
-        // Specialisations
-        else if (node instanceof NodeTerm) {
-            return interpretBoolean((NodeTerm) node);
-        } else if (node instanceof NodeBinaryComp) {
-            return interpret((NodeBinaryComp) node);
+            return !interpretBexpr(((NodeBExprNot) node).val);
+        } else if (node instanceof NodeBExprComp) {
+            return interpretComp(((NodeBExprComp) node).val);
         } else {
             throw new RuntimeException("Unimplemented Boolean Expression Operation");
         }
@@ -111,9 +106,21 @@ public class Parser {
      * Comparision nodes compare values on both sides of an operator. For a value to be comparable it must first be 
      * represented as a double.
      */
-    private boolean interpret(NodeBinaryComp comp) {
-        double lhs = interpretDouble(comp.lhs);
-        double rhs = interpretDouble(comp.rhs);
+    private boolean interpretComp(NodeComp comp) {
+
+        if (comp instanceof NodeCompTerm) {
+            Object value = interpretTerm(((NodeCompTerm) comp).val);
+            if (value instanceof Boolean) {
+                return (Boolean) value;
+            } else {
+                throw new RuntimeException("Atomic expression required to be boolean but is not: " + value);
+            }
+        } else if (!(comp instanceof NodeBinaryComp)) {
+            throw new RuntimeException("Unimplemented Comparison Operation");
+        }
+
+        double lhs = toDouble(interpretTerm(((NodeBinaryComp) comp).lhs));
+        double rhs = toDouble(interpretTerm(((NodeBinaryComp) comp).rhs));
 
         if (comp instanceof NodeCompEqual) {
             return lhs == rhs;
@@ -132,42 +139,54 @@ public class Parser {
         }
     }
 
+    
     /**
-     * Interpret Boolean.
+     * Interpret Term
      * 
-     * Any node that can exist outside of a comparision node should be represented as a boolean to make a valid 
-     * top level boolean expression.
+     * Term is an atomic node and is the terminal node in any syntax tree branch. Terms can be literal values or variables
+     * that can be provided on Parser creation. Terms can be any value of any type, so long as they fit in higher level 
+     * expressions. Qualifier-member nodes will be concatenated with a period "." when grabbed fromn the variable map
      */
-    private boolean interpretBoolean(NodeTerm term) {
-        Object value = interpret(term);
-        if (value instanceof Boolean) {
-            return (Boolean) value;
+    private Object interpretTerm(NodeTerm term) {
+        if (term instanceof NodeTermLiteral) {
+            return interpretLiteral(((NodeTermLiteral) term).val);
+        } else if (term instanceof NodeTermVariable) {
+            return interpretVariable(((NodeTermVariable) term).val);
+        } else if (term instanceof NodeArithmetic) {
+            double lhs = toDouble(interpretTerm(((NodeArithmetic) term).lhs));
+            double rhs = toDouble(interpretTerm(((NodeArithmetic) term).rhs));
+
+            if (term instanceof NodeAdd) return lhs + rhs;
+            else if (term instanceof NodeSub) return lhs - rhs;
+            else if (term instanceof NodeMul) return lhs * rhs;
+            else if (term instanceof NodeDiv) return lhs / rhs;
+            else if (term instanceof NodeMod) return lhs % rhs;
+            else if (term instanceof NodePow) return Math.pow(lhs, rhs);
+
+            return 0;
         } else {
-            throw new RuntimeException("Atomic expression required to be boolean but is not: " + value);
+            throw new RuntimeException("Unimplemented Atomic Expression");
         }
     }
+    
+    private Object interpretLiteral(NodeLiteral term) {
+        return ((OpValue<?>) term).val;
+    }
 
-    /**
-     * Interpret Arithmetic node.
-     * 
-     * Any node with an arithmetic operator can act on double-representable nodes. While order of operations is governed
-     * by the Parser, it is important to remember that the Interpreter evaluates node from the bottom up, and from left 
-     * to right.
-     */
-    private double interpretArithmetic(NodeArithmetic arithmetic) {
-
-        if (arithmetic instanceof NodeAdd) return interpretDouble(arithmetic.lhs) + interpretDouble(arithmetic.rhs);
-        else if (arithmetic instanceof NodeSub) return interpretDouble(arithmetic.lhs) - interpretDouble(arithmetic.rhs);
-        else if (arithmetic instanceof NodeMul) return interpretDouble(arithmetic.lhs) * interpretDouble(arithmetic.rhs);
-        else if (arithmetic instanceof NodeDiv) return interpretDouble(arithmetic.lhs) / interpretDouble(arithmetic.rhs);
-        else if (arithmetic instanceof NodeMod) return interpretDouble(arithmetic.lhs) % interpretDouble(arithmetic.rhs);
-        else if (arithmetic instanceof NodePow) return Math.pow(interpretDouble(arithmetic.lhs), interpretDouble(arithmetic.rhs));
-
-        return 0;
+    private Object interpretVariable(NodeVariable var) {
+        if (var instanceof NodeQualifierMember) {
+            NodeQualifierMember qm = (NodeQualifierMember) var;
+            return getVariable(qm.lhs + "." + qm.lhs);
+        } else if (var instanceof NodeQualifier) {
+            NodeQualifier qm = (NodeQualifier) var;
+            return getVariable(qm.val);
+        } else {
+            throw new RuntimeException("Unimplemented Variable Type");
+        }
     }
     
     /**
-     * Interpret Double.
+     * To Double.
      * 
      * For a node to viably exist in an equality, or an arithmetic expression, it must have a numerical representation.
      * For this reason, all values are converted and cast into double. Strings are hashed before being evaluated. While
@@ -175,14 +194,7 @@ public class Parser {
      * same. All strings that are equal must have the same hash but not all strings with the same has must be equivalent.
      * Read the Java Documentation on Strings for more info.
      */
-    private double interpretDouble(NodeTerm term) {
-        Object value;
-        if (term instanceof NodeArithmetic) {
-            value = interpretArithmetic((NodeArithmetic) term);
-        } else {
-            value = interpret(term);
-        }
-
+    private double toDouble(Object value) {
         if (value == null) {
             return 0;
         } else if (value instanceof Date) {
@@ -195,27 +207,6 @@ public class Parser {
             return (double) ((String) value).hashCode();
         } else {
             throw new RuntimeException("Atomic expression required to be double, or double similar, but is not: " + value);
-        }
-    }
-
-    /**
-     * Interpret Term
-     * 
-     * Term is an atomic node and is the terminal node in any syntax tree branch. Terms can be literal values or variables
-     * that can be provided on Parser creation. Terms can be any value of any type, so long as they fit in higher level 
-     * expressions. Qualifier-member nodes will be concatenated with a period "." when grabbed fromn the variable map
-     */
-    private Object interpret(NodeTerm term) {
-        if (term instanceof NodeLiteral) {
-            return ((OpValue<?>) term).val;
-        } else if (term instanceof NodeQualifierMember) {
-            NodeQualifierMember qm = (NodeQualifierMember) term;
-            return getVariable(qm.lhs + "." + qm.lhs);
-        } else if (term instanceof NodeQualifier) {
-            NodeQualifier qm = (NodeQualifier) term;
-            return getVariable(qm.val);
-        } else {
-            throw new RuntimeException("Unimplemented Atomic Expression");
         }
     }
 
@@ -278,7 +269,7 @@ public class Parser {
                 }
             }
             
-            if (termParen) temp = parseComp();
+            if (termParen) temp = new NodeBExprComp(parseComp());
 
             // Otherwise, assume the parentheses are boolean
             else {
@@ -291,19 +282,23 @@ public class Parser {
                     
                 if (!tryConsume(Token.CloseParen))
                     throw new RuntimeException("Expected ')'");
+
             }
         }
         
         else temp = null;
 
         // First part of the expression should be a comp if it doesn't start with boolean parentheses or a not.
-        final NodeBExpr comp = temp == null ? parseComp() : temp;
-        if (comp != null) {
+        final NodeBExpr bexpr;
+        final NodeComp comp = parseComp();
+        
+        bexpr = temp == null? comp == null ? null : new NodeBExprComp(comp) : temp;
+        if (bexpr != null) {
             if (peek() == Token.EOT || peek() == Token.CloseParen) {
-                return comp;
+                return bexpr;
             }
             else if (peek().type == TokenType.BooleanArithmetic) {
-                return booleanNode(consume(), comp, parseBexpr());
+                return booleanNode(consume(), bexpr, parseBexpr());
             }
             else { 
                 throw new RuntimeException("Unexpected token: " + peek().value + " (" + peek().type + ")");
@@ -341,7 +336,7 @@ public class Parser {
     private NodeComp parseComp() {
 
         final NodeTerm term = parseTerm();        
-        if (peek().type != TokenType.Equality) return term;
+        if (peek().type != TokenType.Equality) return new NodeCompTerm(term);
 
         final Token op = consume();
         final NodeTerm other = parseTerm();
@@ -433,16 +428,24 @@ public class Parser {
      */
 
     private NodeTerm parseAtom() {
-        NodeTerm term;
+        final NodeTerm term;
+        final NodeLiteral lit;
+        final NodeVariable var;
         if (tryConsume(Token.OpenParen)) {
             term = parseTerm();
             if (!tryConsume(Token.CloseParen)) {
                 throw new RuntimeException("Expected ')'");
             }
+            return term;
         } 
-        else if ((term = parseVariable()) != null) {} 
-        else if ((term = parseLiteral()) != null) {}
-        return term;
+        else if ((var = parseVariable()) != null) {
+            return new NodeTermVariable(var);
+        } 
+        else if ((lit = parseLiteral()) != null) {
+            return new NodeTermLiteral(lit);
+        } else {
+            return null;
+        }
     }
 
     /*
@@ -927,22 +930,17 @@ class Token {
 interface NodeBExpr {
     public String nodeName();
 }
-interface NodeComp extends NodeBExpr {
+interface NodeComp {
     public String nodeName();
 }
-interface NodeTerm extends NodeComp {
+interface NodeTerm {
     public String nodeName();
 }
-interface NodeVariable extends NodeTerm {
+interface NodeVariable {
     public String nodeName();
 }
-interface NodeLiteral extends NodeTerm {
+interface NodeLiteral {
     public String nodeName();
-}
-abstract class NodeArithmetic extends OpBinary<NodeTerm> implements NodeTerm {
-    NodeArithmetic(NodeTerm lhs, NodeTerm rhs) {
-        super(lhs, rhs);
-    }
 }
 
 abstract class NodeBinaryComp extends OpBinary<NodeTerm> implements NodeComp {
@@ -1032,6 +1030,16 @@ class NodeBExprNot extends OpUnary<NodeBExpr> implements NodeBExpr {
     }
 }
 
+class NodeBExprComp extends OpUnary<NodeComp> implements NodeBExpr {
+    public NodeBExprComp(NodeComp val) {
+        super(val);
+    }
+    
+    public String nodeName() {
+        return "BExprComp";
+    }
+}
+
 class NodeCompGreaterThan extends NodeBinaryComp {
     public NodeCompGreaterThan(NodeTerm lhs, NodeTerm rhs) {
         super(lhs, rhs);
@@ -1091,6 +1099,37 @@ class NodeCompNotEqual extends NodeBinaryComp {
         return "Neq";
     }
 }
+
+class NodeCompTerm extends OpUnary<NodeTerm> implements NodeComp {
+    public NodeCompTerm(NodeTerm val) {
+        super(val);
+    }
+    
+    public String nodeName() {
+        return "CompTerm";
+    }
+}
+
+class NodeTermLiteral extends OpUnary<NodeLiteral> implements NodeTerm {
+    public NodeTermLiteral(NodeLiteral val) {
+        super(val);
+    }
+    
+    public String nodeName() {
+        return "TermLiteral";
+    }
+}
+
+class NodeTermVariable extends OpUnary<NodeVariable> implements NodeTerm {
+    public NodeTermVariable(NodeVariable val) {
+        super(val);
+    }
+    
+    public String nodeName() {
+        return "TermVariable";
+    }
+}
+
 
 class NodeQualifier extends OpUnary<String> implements NodeVariable {
     NodeQualifier(String val) {
@@ -1159,6 +1198,13 @@ class NodeEmpty extends OpValue<Void> implements NodeLiteral {
     
     public String nodeName() {
         return "Empty";
+    }
+}
+
+
+abstract class NodeArithmetic extends OpBinary<NodeTerm> implements NodeTerm {
+    NodeArithmetic(NodeTerm lhs, NodeTerm rhs) {
+        super(lhs, rhs);
     }
 }
 
