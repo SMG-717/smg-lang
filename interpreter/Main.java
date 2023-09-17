@@ -92,12 +92,12 @@ public class Main {
             if (test.get(1) == ERROR) {
                 // Expecting error
                 try {
-                    new Parser(expression, vars).interpret();
+                    new Interpreter(expression, vars).interpret();
                 } catch (Exception e) {
                     success = true;
                 }
             } else {
-                success = new Parser(expression, vars).interpret() == (Boolean) test.get(1);
+                success = new Interpreter(expression, vars).interpret() == (Boolean) test.get(1);
             }
 
             count += success ? 1 : 0;
