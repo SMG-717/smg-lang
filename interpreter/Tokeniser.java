@@ -1,6 +1,7 @@
 package interpreter;
 
 import java.util.List;
+import java.util.Set;
 
 public class Tokeniser {
 
@@ -165,10 +166,10 @@ public class Tokeniser {
 
     // List of all single character tokens for simplicity.
     private static final List<Token> singles = List.of(
-        Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Minus, Token.Star, Token.Div, Token.Mod, Token.Power,
-        Token.Equals, Token.At, Token.Underscore, Token.Hashtag, Token.Question, Token.Comma, Token.Colon, Token.Period, 
-        Token.Semi, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, Token.OpenSquare,
-        Token.CloseSquare
+        Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, Token.Asterisk, Token.ForwardSlash, Token.Percent, 
+        Token.Caret, Token.Equals, Token.At, Token.Underscore, Token.Hashtag, Token.Question, Token.Comma, Token.Colon, 
+        Token.Period, Token.Semi, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, 
+        Token.OpenSquare, Token.CloseSquare
     );
 
     private Token consumeSingleCharToken() {
@@ -224,6 +225,10 @@ public class Tokeniser {
     public void reset() {
         charIndex = 0;
     }
+
+    public String toString() {
+        return expression;
+    }
 }
 
 /*
@@ -236,7 +241,7 @@ public class Tokeniser {
 enum TokenType{
     Qualifier, Keyword, Punctuation, WhiteSpace,
     NumberLiteral, StringLiteral, BooleanLiteral, DateLiteral, 
-    Arithmetic, Equality, BooleanArithmetic, BitArithmetic;
+    BinaryArithmetic, UnaryArithmetic;
 }
 
 /*
@@ -250,32 +255,39 @@ enum TokenType{
 class Token {
 
     public final String value;
-    public final TokenType type;
+    public final Set<TokenType> types;
     public final int precedence;
 
     public static final Token Empty = new Token("empty", TokenType.Keyword);
-    public static final Token Not = new Token("not", TokenType.Keyword);
+    public static final Token If = new Token("if", TokenType.Keyword);
+    public static final Token Else = new Token("else", TokenType.Keyword);
+    public static final Token Let = new Token("let", TokenType.Keyword);
+
     public static final Token True = new Token("true", TokenType.BooleanLiteral);
     public static final Token False = new Token("false", TokenType.BooleanLiteral);
-    public static final Token And = new Token("and", TokenType.BooleanArithmetic);
-    public static final Token Or = new Token("or", TokenType.BooleanArithmetic);
-    public static final Token ShiftLeft = new Token("<<", TokenType.BitArithmetic);
-    public static final Token ShiftRight = new Token(">>", TokenType.BitArithmetic);
-    public static final Token Ampersand = new Token("&", TokenType.BitArithmetic);
-    public static final Token Pipe = new Token("|", TokenType.BitArithmetic);
-    public static final Token Tilde = new Token("~", TokenType.BitArithmetic);
-    public static final Token Plus = new Token("+", TokenType.Arithmetic, 1);
-    public static final Token Minus = new Token("-", TokenType.Arithmetic, 2);
-    public static final Token Star = new Token("*", TokenType.Arithmetic, 3);
-    public static final Token Div = new Token("/", TokenType.Arithmetic, 3);
-    public static final Token Mod = new Token("%", TokenType.Arithmetic, 3);
-    public static final Token Power = new Token("^", TokenType.Arithmetic, 4);
-    public static final Token Equals = new Token("=", TokenType.Equality);
-    public static final Token NotEquals = new Token("!=", TokenType.Equality);
-    public static final Token Greater = new Token(">", TokenType.Equality);
-    public static final Token Less = new Token("<", TokenType.Equality);
-    public static final Token GreaterEqual = new Token(">=", TokenType.Equality);
-    public static final Token LessEqual = new Token("<=", TokenType.Equality);
+    
+    public static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8);
+    public static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);
+    public static final Token ForwardSlash = new Token("/", TokenType.BinaryArithmetic, 7);
+    public static final Token Percent = new Token("%", TokenType.BinaryArithmetic, 7);
+    public static final Token Plus = new Token("+", TokenType.BinaryArithmetic, 6);
+    public static final Token Hyphen = new Token("-", Set.of(TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6);
+    public static final Token ShiftLeft = new Token("<<", TokenType.BinaryArithmetic, 5);
+    public static final Token ShiftRight = new Token(">>", TokenType.BinaryArithmetic, 5);
+    public static final Token Greater = new Token(">", TokenType.BinaryArithmetic, 4);
+    public static final Token Less = new Token("<", TokenType.BinaryArithmetic, 4);
+    public static final Token GreaterEqual = new Token(">=", TokenType.BinaryArithmetic, 4);
+    public static final Token LessEqual = new Token("<=", TokenType.BinaryArithmetic, 4);
+    public static final Token Equals = new Token("=", TokenType.BinaryArithmetic, 3);
+    public static final Token NotEquals = new Token("!=", TokenType.BinaryArithmetic, 3);
+    public static final Token Ampersand = new Token("&", TokenType.BinaryArithmetic, 2);
+    public static final Token Pipe = new Token("|", TokenType.BinaryArithmetic, 2);
+    public static final Token Xor = new Token("xor", TokenType.BinaryArithmetic, 2);
+    public static final Token And = new Token("and", TokenType.BinaryArithmetic, 1);
+    public static final Token Or = new Token("or", TokenType.BinaryArithmetic, 1);
+    public static final Token Not = new Token("not", TokenType.UnaryArithmetic);
+    public static final Token Tilde = new Token("~", TokenType.UnaryArithmetic);
+
     public static final Token At = new Token("@", TokenType.Punctuation);
     public static final Token Underscore = new Token("_", TokenType.Punctuation);
     public static final Token Hashtag = new Token("#", TokenType.Punctuation);
@@ -304,7 +316,13 @@ class Token {
 
     private Token(String val, TokenType type, int precedence) {
         this.value = val;
-        this.type = type;
+        this.types = Set.of(type);
+        this.precedence = precedence;
+    }
+
+    private Token(String val, Set<TokenType> types, int precedence) {
+        this.value = val;
+        this.types = Set.copyOf(types);
         this.precedence = precedence;
     }
 
@@ -314,6 +332,10 @@ class Token {
 
     static Token makeToken(String name, TokenType type) {
         return new Token(name, type);
+    }
+
+    boolean is(TokenType type) {
+        return types.contains(type);
     }
 
     @Override
@@ -328,13 +350,13 @@ class Token {
         }
 
         Token token = (Token) other;
-        return this.value.equals(token.value) && this.type == token.type && this.precedence == token.precedence;
+        return this.value.equals(token.value) && this.types.equals(token.types) && this.precedence == token.precedence;
     }
 
     @Override
     public int hashCode() {
         // Not sure how collision free this is. -SMG
-        return (this.value.hashCode() + this.type.hashCode()) ^ this.precedence;
+        return (this.value.hashCode() + this.types.hashCode()) ^ this.precedence;
     }
 
 }

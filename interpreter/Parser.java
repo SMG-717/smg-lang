@@ -2,15 +2,17 @@ package interpreter;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Parser {
     
     private final List<Token> cache;
     private final Tokeniser tokeniser;
-    private NodeExpression root = null;
+    private NodeProgram root = null;
 
     public Parser(Tokeniser tokeniser) {
         this.tokeniser = tokeniser;
@@ -32,9 +34,9 @@ public class Parser {
      * which might make it harder for the interpreter to traverse, but is more
      * space and time efficient.
      **************************************************************************/
-    public NodeExpression parse() {
+    public NodeProgram parse() {
         tokeniser.reset();
-        root = parseBexpr();
+        root = parseProgram();
 
         if (peek() != Token.EOT) {
             throw new RuntimeException("Unexpected token at End of Expression: " + peek().value);
@@ -42,171 +44,90 @@ public class Parser {
         return root;
     }
 
-    /**
-     * Parse Boolean Expression
-     * 
-     * Attempts to cover the entire expression and calls other parser functions when necessary. It decides how to generate
-     * the tree based on the first few tokens, and whether or not other parsers can fully process some tokens.
-     * 
-     * In language grammer terms, the production of a boolean expression is as follows:
-     * 
-     * BExpr -> [Comp] | [BExpr] and [BExpr] | [BExpr] or [BExpr] | ([BExpr]) | not ([BExpr]) 
-     * 
-     * One important aspect is the differentiation of parenthesis based how they appear in the stream of tokens. In this
-     * context they shall be called "boolean" and "term" brackets, for brackets that exist on the boolean expression, and
-     * term expression levels respectively. Boolean brackets are distinguishingly followed by a boolean expression token
-     * (And, Or), while term brackets do not. There is obviously some overlap in this criteria, as the closing both
-     * brackets can be followed by an EOT (End of Tokens) Token for example. In this case, and other similar cases, the
-     * tie goes to boolean brackets, as the problem arises when term brackets are interpreted as boolean brackets, but 
-     * not the other way around. 
-     * 
-     * Not operators can also make an appearance but not without an associated set of brackets, in which case they are 
-     * treated in a similar vein to boolean brackets.
-     */
-    private NodeExpression parseBexpr() {
-        final NodeExpression temp;
-        if (peek() == Token.OpenParen || peek() == Token.Not) {
+    private NodeProgram parseProgram() {
 
-            // Find the matching closing parenthesis
-            int ahead = 1, balance = 0;
-            boolean termParen = false;
-            while (peek(ahead) != Token.EOT) {
-                if (peek(ahead) == Token.OpenParen) balance += 1;
-                else if (peek(ahead) == Token.CloseParen) balance -= 1;
-
-                ahead += 1;
-                if (balance < 0) {
-                    // If the closing parenthesis seems to belong to a Comparison node, it is treated as a term
-                    termParen = !(peek(ahead).type == TokenType.BooleanArithmetic || peek(ahead) == Token.EOT);
-                    break;
-                }
+        List<NodeStatement> statements = new ArrayList<>();
+        while (peek() != Token.EOT) {
+            NodeStatement statement = parseStatement();
+            if (statement == null) {
+                throw new RuntimeException("Incomplete/Unparsable statement");
             }
-            
-            if (termParen) temp = new NodeExpression.Comp(parseComp());
-
-            // Otherwise, assume the parentheses are boolean
-            else {
-                if (tryConsume(Token.OpenParen)) 
-                    temp = parseBexpr();
-                else if (tryConsume(Token.Not) && tryConsume(Token.OpenParen)) 
-                    temp = new NodeExpression.Not(parseBexpr()); 
-                else 
-                    throw new RuntimeException("Unexpected Token: " + peek().value);
-                    
-                if (!tryConsume(Token.CloseParen))
-                    throw new RuntimeException("Expected ')'");
-
-            }
+            statements.add(statement);
         }
-        
-        else temp = null;
 
-        // First part of the expression should be a comp if it doesn't start with boolean parentheses or a not.
-        final NodeExpression bexpr;
-        final NodeComp comp = parseComp();
-        
-        bexpr = temp == null? comp == null ? null : new NodeExpression.Comp(comp) : temp;
-        if (bexpr != null) {
-            if (peek() == Token.EOT || peek() == Token.CloseParen) {
-                return bexpr;
-            }
-            else if (peek().type == TokenType.BooleanArithmetic) {
-                return booleanNode(consume(), bexpr, parseBexpr());
-            }
-            else { 
-                throw new RuntimeException("Unexpected token: " + peek().value + " (" + peek().type + ")");
+        return new NodeProgram(statements);
+    }
+
+    private NodeStatement parseStatement() {
+
+        if (tryConsume(Token.Let)) {
+            throw new RuntimeException("Unsupported operation: let");
+        }
+
+        final NodeExpression bexpr = parseExpression();
+        return bexpr == null ? null : new NodeStatement.Expression(bexpr);
+    }
+
+    private NodeExpression parseExpression() { return parseExpression(null, 0); }
+    private NodeExpression parseExpression(NodeExpression term, int prec) {
+
+        if (tryConsume(Token.OpenParen)) {
+            term = parseExpression(term, 0);
+            if (!tryConsume(Token.CloseParen)) {
+                throw new RuntimeException("Expected ')'");
             }
         } 
 
-        else {
-            throw new RuntimeException("Something went wrong!");
+        if (peek().is(TokenType.UnaryArithmetic)) {
+            final Token op = consume();
+
+            final NodeExpression innerTerm; 
+            if (tryConsume(Token.OpenParen)) {
+                innerTerm = parseExpression(term, 0);
+                if (!tryConsume(Token.CloseParen)) {
+                    throw new RuntimeException("Expected ')'");
+                }
+            } 
+            else {
+                innerTerm = new NodeExpression.Term(parseTerm());
+            }
+
+            if (op == Token.Not) {
+                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Not);
+            }
+            else if (op == Token.Tilde) {
+                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Invert);
+            }
+            else if (op == Token.Hyphen) {
+                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Negate);
+            }
+            else {
+                throw new RuntimeException("Unsupported unary operation: " + op);
+            }
         }
-    }
 
-    /*
-     * Helper function that assigns the correct boolean node
-     */
-    private NodeExpression booleanNode(Token op, NodeExpression lhs, NodeExpression rhs) {
-        if (op == Token.And) return new NodeExpression.And(lhs, rhs);
-        else if (op == Token.Or) return new NodeExpression.Or(lhs, rhs);
-        else {
-            throw new RuntimeException("Unsupported boolean operation: " + op.value);
+        if (term == null) {
+            NodeTerm atom = parseTerm();
+            term = new NodeExpression.Term(atom);
         }
-    }
-
-    /*
-     * Parse Comparison
-     * 
-     * A comparison can either be a calculation that compares two double-generating term and returns a boolean answer,
-     * or a simple atomic term that can evaluate to anything. Note that the interpreter requires that comps return a 
-     * boolean but the parser does not care about that.
-     * 
-     * The production for a Comp in grammer form looks like the following:
-     * Comp -> [Term] | [Term] = [Term] | [Term] != [Term] | [Term] > [Term] | [Term] >= [Term] | [Term] < [Term] | [Term] <= [Term]
-     * 
-     * Comps must either be simple Terms or two Terms compared by an Equality operator 
-     */
-    private NodeComp parseComp() {
-
-        final NodeTerm term = parseTerm();        
-        if (peek().type != TokenType.Equality) return new NodeComp.Term(term);
-
-        final Token op = consume();
-        final NodeTerm other = parseTerm();
-
-        if (op == Token.Equals)             return new NodeComp.Binary(NodeComp.Operator.Equal, term, other);
-        else if (op == Token.NotEquals)     return new NodeComp.Binary(NodeComp.Operator.NotEqual, term, other);
-        else if (op == Token.Greater)       return new NodeComp.Binary(NodeComp.Operator.GreaterThan, term, other);
-        else if (op == Token.GreaterEqual)  return new NodeComp.Binary(NodeComp.Operator.GreaterThanEqual, term, other);
-        else if (op == Token.Less)          return new NodeComp.Binary(NodeComp.Operator.LessThan, term, other);
-        else if (op == Token.LessEqual)     return new NodeComp.Binary(NodeComp.Operator.LessThanEqual, term, other);
-        else {
-            throw new RuntimeException("Unsupported Equality operator: " + op.value);
-        }
-    }
-
-    /*
-     * Parse Term
-     * 
-     * Terms are expressions that can be evaluated and used in comparisions or as boolean expressions on their own.
-     * A Term can be composed of an Atomic expression, or a sequence of Atomic expressions separated by arithmetic operators.
-     * 
-     * The production for Terms is as follows:
-     * 
-     * Term -> [Atom] | 
-     * prec 1:  [Term] + [Term] | [Term] - [Term] |  
-     * prec 2:  [Term] * [Term] | [Term] / [Term] | [Term] % [Term] |  
-     * prec 3:  [Term] ^ [Term]  
-     * 
-     * Note the addition of "prec" in the grammar production, which stands for precedence. Operators with higher precedence
-     * get deeper nodes in the resulting final tree, which leads to getting calculated first in the interpreter. Term parser
-     * will run through all the tokens it can while maintaining a certain precedence level. If a higher precedence operator
-     * appears, it would invokde a deeper parseTerm process with a precedence level equivalent to the operator it encountered.
-     * If a lower precedence operator is encountered the process stops and returns the tree it built along the way. This
-     * way the lower precedence process would pick up from where it left off. The lowest precedence level is 0, which is 
-     * the default.
-     * 
-     * This function could maybe do with some improvements.
-     */
-
-    private NodeTerm parseTerm() { return parseTerm(null, 0); }
-    private NodeTerm parseTerm(NodeTerm term, int prec) {
-
-        term = term == null ? parseAtom() : term;
-        while (peek().type == TokenType.Arithmetic) {
+        
+        while (peek().is(TokenType.BinaryArithmetic)) {
             if (peek().precedence > prec) {
-                term = parseTerm(term, peek().precedence);
+                term = parseExpression(term, peek().precedence);
                 continue;
             } 
 
             final Token op = consume();
-            NodeTerm other = parseAtom();
-            if (other == null) {
+            final NodeTerm otherAtom = parseTerm();
+            if (otherAtom == null) {
                 throw new RuntimeException("Expected term");
-            } else if (peek().type != TokenType.Arithmetic || peek().precedence < prec) {
+            }
+
+            NodeExpression other = new NodeExpression.Term(otherAtom);
+            if (peek().is(TokenType.BinaryArithmetic) || peek().precedence < prec) {
                 return arthmeticNode(op, term, other);
-            } else while (peek().type == TokenType.Arithmetic && peek().precedence > prec) {
-                other = parseTerm(other, peek().precedence);
+            } else while (peek().is(TokenType.BinaryArithmetic) && peek().precedence > prec) {
+                other = parseExpression(other, peek().precedence);
             }
             term = arthmeticNode(op, term, other);
         }
@@ -217,13 +138,21 @@ public class Parser {
     /*
      * Helper function that assigns the correct arithmetic node
      */
-    private NodeTerm arthmeticNode(Token op, NodeTerm lhs, NodeTerm rhs) {
-        if (op == Token.Plus) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Add, lhs, rhs);
-        else if (op == Token.Minus) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Subtract, lhs, rhs);
-        else if (op == Token.Star) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Multiply, lhs, rhs);
-        else if (op == Token.Div) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Divide, lhs, rhs);
-        else if (op == Token.Mod) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Modulus, lhs, rhs);
-        else if (op == Token.Power) return new NodeTerm.Arithmetic(NodeTerm.Arithmetic.Operator.Exponent, lhs, rhs);
+    private NodeExpression arthmeticNode(Token op, NodeExpression lhs, NodeExpression rhs) {
+        if (op == Token.Plus) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Add, lhs, rhs);
+        else if (op == Token.Hyphen) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Subtract, lhs, rhs);
+        else if (op == Token.Asterisk) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Multiply, lhs, rhs);
+        else if (op == Token.ForwardSlash) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Divide, lhs, rhs);
+        else if (op == Token.Percent) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Modulo, lhs, rhs);
+        else if (op == Token.Caret) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Exponent, lhs, rhs);
+        else if (op == Token.Greater) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Greater, lhs, rhs);
+        else if (op == Token.GreaterEqual) return new NodeExpression.Binary(NodeExpression.Binary.Operator.GreaterEqual, lhs, rhs);
+        else if (op == Token.Less) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Less, lhs, rhs);
+        else if (op == Token.LessEqual) return new NodeExpression.Binary(NodeExpression.Binary.Operator.LessEqual, lhs, rhs);
+        else if (op == Token.Equals) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Equal, lhs, rhs);
+        else if (op == Token.NotEquals) return new NodeExpression.Binary(NodeExpression.Binary.Operator.NotEqual, lhs, rhs);
+        else if (op == Token.And) return new NodeExpression.Binary(NodeExpression.Binary.Operator.And, lhs, rhs);
+        else if (op == Token.Or) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Or, lhs, rhs);
         else {
             throw new RuntimeException("Unsupported arithmetic operation: " + peek().value);
         }
@@ -240,18 +169,10 @@ public class Parser {
      * Atom -> ([Term]) | [Variable] | [Literal]
      */
 
-    private NodeTerm parseAtom() {
-        final NodeTerm term;
+    private NodeTerm parseTerm() {
         final NodeLiteral<?> lit;
         final NodeVariable var;
-        if (tryConsume(Token.OpenParen)) {
-            term = parseTerm();
-            if (!tryConsume(Token.CloseParen)) {
-                throw new RuntimeException("Expected ')'");
-            }
-            return term;
-        } 
-        else if ((var = parseVariable()) != null) {
+        if ((var = parseVariable()) != null) {
             return new NodeTerm.Variable(var);
         } 
         else if ((lit = parseLiteral()) != null) {
@@ -273,7 +194,7 @@ public class Parser {
      * Variable -> [Qualifier] | [Qualifier].[Qualifier] 
      */
     private NodeVariable parseVariable() {
-        if (peek().type != TokenType.Qualifier) {
+        if (!peek().is(TokenType.Qualifier)) {
             return null;   
         }
 
@@ -292,25 +213,25 @@ public class Parser {
     private NodeLiteral<?> parseLiteral() {
 
         if (tryConsume(Token.Empty)) {
-            return new NodeEmpty();
+            return new NodeLiteral<Void>(null);
         }
 
-        switch (peek().type) {
-            case BooleanLiteral:
-                return new NodeBoolean(consume().equals(Token.True));
-            case StringLiteral:
-                return new NodeString(consume().value);
-            case NumberLiteral:
-                return new NodeNumber(Double.parseDouble(consume().value));
-            case DateLiteral:
-                final String dateToken = consume().value;
-                try {
-                    return new NodeDate(format.parse(dateToken));
-                } catch (ParseException e) {
-                    throw new RuntimeException("Date format error: " + dateToken);
-                }
-            default:
-                return null;
+        if (peek().is(TokenType.BooleanLiteral)) 
+            return new NodeLiteral<Boolean>(consume().equals(Token.True));
+        else if (peek().is(TokenType.StringLiteral))
+            return new NodeLiteral<String>(consume().value);
+        else if (peek().is(TokenType.NumberLiteral))
+            return new NodeLiteral<Double>(Double.parseDouble(consume().value));
+        else if (peek().is(TokenType.DateLiteral)) {
+            final String dateToken = consume().value;
+            try {
+                return new NodeLiteral<Date>(format.parse(dateToken));
+            } catch (ParseException e) {
+                throw new RuntimeException("Date format error: " + dateToken);
+            }
+        }
+        else {
+            return null;
         }
     }
 
@@ -349,7 +270,7 @@ public class Parser {
         return success;
     }
 
-    public NodeExpression getRoot() {
+    public NodeProgram getRoot() {
         return root;
     }
 }
@@ -359,6 +280,10 @@ class NodeProgram {
 
     NodeProgram(List<NodeStatement> statements) {
         this.statements = List.copyOf(statements);
+    }
+
+    public String toString() {
+        return "Program: { " + String.join(", ", statements.stream().map(x -> x.toString()).collect(Collectors.toList())) + " }";
     }
 }
 
@@ -372,105 +297,109 @@ interface NodeStatement {
             this.qualifier = qualifier;
             this.expression = expression;
         }
-    }    
-}
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
 
-interface NodeExpression extends NodeStatement {
-    class And implements NodeExpression {
-        public final NodeExpression lhs, rhs;
-    
-        And(NodeExpression lhs, NodeExpression rhs) {
-            this.lhs = lhs;
-            this.rhs = rhs;
-        }
-
-        public boolean host(Visitor visitor) {
-            return visitor.visit(this);
-        }
+        
+        public String toString() {
+            return "StmtAssign: { " + qualifier + "=" + expression + " }";
+        } 
     }
 
-    class Or implements NodeExpression{
-        public final NodeExpression lhs, rhs;
-    
-        Or(NodeExpression lhs, NodeExpression rhs) {
-            this.lhs = lhs;
-            this.rhs = rhs;
-        }
+    class Expression implements NodeStatement {
+        public final NodeExpression expression;
 
-        public boolean host(Visitor visitor) {
-            return visitor.visit(this);
+        Expression(NodeExpression expression) {
+            this.expression = expression;
         }
-    }
-    
-    class Not implements NodeExpression {
-        public final NodeExpression val;
-    
-        Not(NodeExpression val) {
-            this.val = val;
-        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
 
-        public boolean host(Visitor visitor) {
-            return visitor.visit(this);
-        }
-    }
-    
-    class Comp implements NodeExpression {
-        public final NodeComp val;
-    
-        Comp(NodeComp val) {
-            this.val = val;
-        }
-
-        public boolean host(Visitor visitor) {
-            return visitor.visit(this);
-        }
+        public String toString() {
+            return "StmtExp: { " + expression + " }";
+        } 
     }
 
-    boolean host(Visitor visitor);
+    Object host(Visitor visitor);
     interface Visitor {
-        boolean visit(And node);
-        boolean visit(Or node);
-        boolean visit(Not node);
-        boolean visit(Comp node);
+        Object visit(Assignment assignment);
+        Object visit(Expression expression);
     }
 }
 
-interface NodeComp {
-    class Binary implements NodeComp {
-        public final NodeTerm lhs;
-        public final NodeTerm rhs;
+interface NodeExpression {
+    class Binary implements NodeExpression {
+        public final NodeExpression lhs, rhs;
         public final Operator op;
     
-        Binary(Operator op, NodeTerm lhs, NodeTerm rhs) {
+        Binary(Operator op, NodeExpression lhs, NodeExpression rhs) {
             this.op = op;
             this.lhs = lhs;
             this.rhs = rhs;
         }
 
-        public boolean host(Visitor visitor) {
-            return visitor.visit(this);
+        public <R> R host(Visitor<R> visitor) { return visitor.visit(this); }
+
+        enum Operator {                                 // Precedence
+            Exponent,                                       // 8
+            Multiply, Divide, Modulo,                       // 7
+            Add, Subtract,                                  // 6
+            ShiftLeft, ShiftRight,                          // 5
+            Less, LessEqual, Greater, GreaterEqual,         // 4
+            Equal, NotEqual,                                // 3
+            BitAnd, BitOr, BitXor,                          // 2
+            And, Or                                         // 1
         }
+
+        public String toString() {
+            return "ExprBin: { " + lhs + " " + op + " " + rhs + " }";
+        } 
     }
     
-    class Term implements NodeComp {
-        public final NodeTerm val;
-        public Term(NodeTerm val) {
+    class Unary implements NodeExpression {
+        public final NodeExpression val;
+        public final Operator op;
+    
+        Unary(NodeExpression val, Operator op) {
+            this.op = op;
             this.val = val;
         }
-        
-        public boolean host(Visitor visitor) {
+
+        public <R> R host(Visitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        enum Operator {
+            Increment, Decrement,
+            Negate, Invert, Not
+        }
+        
+        public String toString() {
+            return "ExprUn: { " + op + " " + val + " }";
+        } 
+    }
+    
+    class Term implements NodeExpression {
+        public final NodeTerm val;
+    
+        Term(NodeTerm val) {
+            this.val = val;
+        }
+
+        public <R> R host(Visitor<R> visitor) {
+            return visitor.visit(this);
+        }
+        
+        public String toString() {
+            return "ExprTerm: { " + val + " }";
+        } 
     }
 
-    enum Operator {
-        GreaterThan, GreaterThanEqual, LessThan, LessThanEqual, Equal, NotEqual
-    }
-
-    boolean host(Visitor visitor);
-    interface Visitor {
-        boolean visit(Binary node);
-        boolean visit(Term node);
+    <R> R host(Visitor<R> visitor);
+    interface Visitor<R> {
+        R visit(Binary node);
+        R visit(Unary node);
+        R visit(Term node);
     }
 }
 
@@ -485,6 +414,10 @@ interface NodeTerm {
         public Object host(Visitor visitor) {
             return visitor.visit(this);
         }
+
+        public String toString() {
+            return "TermLit: { " + lit + " }";
+        } 
     }
     
     class Variable implements NodeTerm {
@@ -497,37 +430,16 @@ interface NodeTerm {
         public Object host(Visitor visitor) {
             return visitor.visit(this);
         }
-    }
-    
-    class Arithmetic implements NodeTerm {
         
-        public final NodeTerm lhs;
-        public final NodeTerm rhs;
-        public final Operator op;
-    
-        Arithmetic(Operator op, NodeTerm lhs, NodeTerm rhs) {
-            this.op = op;
-            this.lhs = lhs;
-            this.rhs = rhs;
-        }
-
-        enum Operator {
-            Exponent,
-            Multiply, Divide, Modulus,
-            Add, Subtract,
-        }
-
-        @Override
-        public Object host(Visitor visitor) {
-            return visitor.visit(this);
-        }
+        public String toString() {
+            return "TermVar: { " + var + " }";
+        } 
     }
 
     Object host(Visitor term);
     interface Visitor {
         Object visit(Literal lit);
         Object visit(Variable var);
-        Object visit(Arithmetic arithmetic);
     }
 }
 
@@ -536,42 +448,20 @@ class NodeVariable {
     NodeVariable(String name) {
         this.name = name;
     }
+
+    public String toString() {
+        return "Var: " + this.name;
+    }
 }
 
-abstract class NodeLiteral<R> {
+class NodeLiteral<R> {
     public final R val;
 
     NodeLiteral(R val) {
         this.val = val;
     }
-}
 
-class NodeNumber extends NodeLiteral<Double> {
-    public NodeNumber(Double val) {
-        super(val.doubleValue());
-    }
-}
-
-class NodeDate extends NodeLiteral<Date> {
-    public NodeDate(Date val) {
-        super(val);
-    }
-}
-
-class NodeString extends NodeLiteral<String> {
-    public NodeString(String val) {
-        super(val);
-    }
-}
-
-class NodeBoolean extends NodeLiteral<Boolean> {
-    public NodeBoolean(Boolean val) {
-        super(val.booleanValue());
-    }
-}
-
-class NodeEmpty extends NodeLiteral<Void> {
-    public NodeEmpty() {
-        super(null);
+    public String toString() {
+        return "Lit: " + this.val;
     }
 }

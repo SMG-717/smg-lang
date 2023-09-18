@@ -22,6 +22,11 @@ public class Main {
 
         final List<List<Object>> expressions = List.of(
 
+            // Temp cases
+
+            // List.of("(1 + 2 + 3) * 100 * 4 / (30 + 5 ^ 2 - 5) = 24 * 2", true), // Currently Code Breaking
+
+            // Test cases
             List.of("true", true),
             List.of("false", false),
             List.of("not(true)", false),

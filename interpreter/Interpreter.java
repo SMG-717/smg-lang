@@ -4,15 +4,11 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import interpreter.NodeComp.Binary;
-import interpreter.NodeComp.Term;
-import interpreter.NodeExpression.And;
-import interpreter.NodeExpression.Comp;
-import interpreter.NodeExpression.Not;
-import interpreter.NodeExpression.Or;
-import interpreter.NodeTerm.Arithmetic;
-import interpreter.NodeTerm.Literal;
-import interpreter.NodeTerm.Variable;
+import interpreter.NodeExpression.Binary;
+import interpreter.NodeExpression.Term;
+import interpreter.NodeExpression.Unary;
+import interpreter.NodeStatement.Assignment;
+import interpreter.NodeStatement.Expression;
 
 public class Interpreter {
 
@@ -31,6 +27,7 @@ public class Interpreter {
 
     private final Map<String, Object> variables;
     private final Parser parser;
+    private Object lastResult;
 
     public Interpreter(String input) {
         this(input, new HashMap<>());
@@ -70,10 +67,33 @@ public class Interpreter {
      * Traverses the Syntax Tree in in-order fashion. Calls the parser if no root
      * node can be found.
      **************************************************************************/
-    public boolean interpret() {
+    public Object interpret() {
         if (parser.getRoot() == null)
             parser.parse();
-        return interpretBexpr(parser.getRoot());
+        return interpretProgram(parser.getRoot());
+    }
+
+    public Object interpretProgram(NodeProgram program) {
+        for (NodeStatement statement : program.statements) {
+            lastResult = interpretStatement(statement);
+        }
+
+        return lastResult;
+    }
+
+    private final NodeStatement.Visitor statementVisitor = new NodeStatement.Visitor() {
+
+        public Object visit(Assignment assignment) {
+            throw new UnsupportedOperationException("Unimplemented method 'visit'");
+        }
+
+        public Object visit(Expression expression) {
+            return interpretBexpr(expression.expression);
+        }
+    };
+
+    public Object interpretStatement(NodeStatement statement) {
+        return statement.host(statementVisitor);
     }
 
     /**
@@ -85,14 +105,58 @@ public class Interpreter {
      * This can be beneficial but potentially hard to debug.
      */
 
-    final NodeExpression.Visitor nodeExpressionVisitor = new NodeExpression.Visitor() {
-        public boolean visit(And node) { return interpretBexpr(node.lhs) && interpretBexpr(node.rhs); }
-        public boolean visit(Or node) { return interpretBexpr(node.lhs) || interpretBexpr(node.rhs); }
-        public boolean visit(Not node) { return !interpretBexpr(node.val); }
-        public boolean visit(Comp node) { return interpretComp(node.val); }
+    final NodeExpression.Visitor<Object> nodeExpressionVisitor = new NodeExpression.Visitor<Object>() {
+        @Override
+        public Object visit(Binary node) {
+
+            final Object left = interpretBexpr(node.lhs);
+            final Object right = interpretBexpr(node.rhs);
+
+            switch (node.op) {
+                case Exponent:          return Math.pow(toDouble(left), toDouble(right));
+                case Multiply:          return toDouble(left) * toDouble(right);
+                case Divide:            return toDouble(left) / toDouble(right);
+                case Modulo:            return toDouble(left) % toDouble(right);
+                case Add:               return toDouble(left) + toDouble(right);
+                case Subtract:          return toDouble(left) - toDouble(right);
+                case Greater:           return toDouble(left) > toDouble(right);
+                case GreaterEqual:      return toDouble(left) >= toDouble(right);
+                case Less:              return toDouble(left) < toDouble(right);
+                case LessEqual:         return toDouble(left) <= toDouble(right);
+                case NotEqual:          return toDouble(left) != toDouble(right);
+                case Equal:             return toDouble(left) == toDouble(right);
+                case BitAnd:            return (Integer) left & (Integer) right;
+                case BitOr:             return (Integer) left | (Integer) right;
+                case BitXor:            return (Integer) left ^ (Integer) right;
+                case ShiftLeft:         return (Integer) left << (Integer) right;
+                case ShiftRight:        return (Integer) left >> (Integer) right;
+                case And:               return (Boolean) left && (Boolean) right;
+                case Or:                return (Boolean) left || (Boolean) right;
+                default:
+                    throw new RuntimeException("Unsupported operation: " + node.op);
+            }
+        }
+
+        @Override
+        public Object visit(Unary node) {
+            switch (node.op) {
+                case Not:               return ! (Boolean) interpretBexpr(node.val);
+                case Invert:            return ~ (Integer) interpretBexpr(node.val);
+                case Negate:            return - toDouble(interpretBexpr(node.val));
+                case Decrement:
+                case Increment:
+                default:
+                    throw new RuntimeException("Unsupported operation: " + node.op);
+
+            }
+        }
+        @Override
+        public Object visit(Term node) {
+            return interpretTerm(node.val);
+        }
     };
 
-    private boolean interpretBexpr(NodeExpression node) {
+    private Object interpretBexpr(NodeExpression node) {
         return node.host(nodeExpressionVisitor);
     }
 
@@ -102,34 +166,6 @@ public class Interpreter {
      * Comparision nodes compare values on both sides of an operator. For a value to be comparable it must first be 
      * represented as a double.
      */
-
-    final NodeComp.Visitor compVisitor = new NodeComp.Visitor() {
-        public boolean visit(Term node) {
-            final Object value = interpretTerm(node.val);
-            if (value instanceof Boolean) {
-                return (Boolean) value;
-            }
-            throw new RuntimeException("Atomic expression required to be boolean but is not: " + value);
-        }
-
-        public boolean visit(Binary node) {
-            final double lhs = toDouble(interpretTerm(node.lhs));
-            final double rhs = toDouble(interpretTerm(node.rhs));
-
-            switch (node.op) {
-                case Equal: return lhs == rhs;
-                case NotEqual: return lhs != rhs;
-                case GreaterThan: return lhs > rhs;
-                case GreaterThanEqual: return lhs >= rhs;
-                case LessThan: return lhs < rhs;
-                case LessThanEqual: return lhs <= rhs;
-                default: 
-                    throw new RuntimeException("Unimplemented Comparison Operation");
-            }
-        }
-    };
-
-    private boolean interpretComp(NodeComp comp) { return comp.host(compVisitor); }
     
     /**
      * Interpret Term
@@ -140,28 +176,12 @@ public class Interpreter {
      */
 
     final NodeTerm.Visitor termVisitor = new NodeTerm.Visitor() {
-        public Object visit(Literal literal) {
+        public Object visit(NodeTerm.Literal literal) {
             return literal.lit.val;
         }
 
-        public Object visit(Variable variable) {
+        public Object visit(NodeTerm.Variable variable) {
             return getVariable(variable.var.name);
-        }
-
-        public Object visit(Arithmetic arithmetic) {
-            final double lhs = toDouble(interpretTerm(arithmetic.lhs));
-            final double rhs = toDouble(interpretTerm(arithmetic.rhs));
-
-            switch (arithmetic.op) {
-                case Add: return lhs + rhs;
-                case Subtract: return lhs - rhs;
-                case Multiply: return lhs * rhs;
-                case Divide: return lhs / rhs;
-                case Modulus: return lhs % rhs;
-                case Exponent: return Math.pow(lhs, rhs);
-                default:
-                    throw new RuntimeException("Unsupported operation: " + arithmetic.op.name());
-            }
         }
     };
 
