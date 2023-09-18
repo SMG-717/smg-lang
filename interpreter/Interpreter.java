@@ -61,6 +61,10 @@ public class Interpreter {
         return this;
     }
 
+    public String getTree() {
+        return parser.getRoot() != null ? parser.getRoot().toString() : null;
+    }
+
     /***************************************************************************
      * Interpreter
      * 

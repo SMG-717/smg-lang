@@ -21,18 +21,11 @@ public class Parser {
     
     public Parser(String input) {
         // The input expression should always end in an End of File token (\0 character)
-        tokeniser = new Tokeniser(input + Token.EOF);
-        this.cache = new LinkedList<>();
+        this(new Tokeniser(input + Token.EOF));
     }
 
     /***************************************************************************
      * Parser
-     * 
-     * Runs through every token in an expression and builds an Abstract Syntax
-     * Tree. The top level node does not necessarily have to be a Boolean 
-     * Expression node. The trees it generates are as compact as they can be,
-     * which might make it harder for the interpreter to traverse, but is more
-     * space and time efficient.
      **************************************************************************/
     public NodeProgram parse() {
         tokeniser.reset();
@@ -64,97 +57,56 @@ public class Parser {
             throw new RuntimeException("Unsupported operation: let");
         }
 
-        final NodeExpression bexpr = parseExpression();
-        return bexpr == null ? null : new NodeStatement.Expression(bexpr);
+        final NodeExpression expr = parseExpression();
+        return expr == null ? null : new NodeStatement.Expression(expr);
     }
 
-    private NodeExpression parseExpression() { return parseExpression(null, 0); }
-    private NodeExpression parseExpression(NodeExpression term, int prec) {
+    private NodeExpression parseExpression() { 
+        return parseExpression(parseAtom(), 0); 
+    }
+    private NodeExpression parseExpression(NodeExpression left, int prec) {
 
-        if (tryConsume(Token.OpenParen)) {
-            term = parseExpression(term, 0);
-            if (!tryConsume(Token.CloseParen)) {
-                throw new RuntimeException("Expected ')'");
-            }
-        } 
-
-        if (peek().is(TokenType.UnaryArithmetic)) {
+        while (peek().is(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
             final Token op = consume();
+            NodeExpression right = parseAtom();
 
-            final NodeExpression innerTerm; 
-            if (tryConsume(Token.OpenParen)) {
-                innerTerm = parseExpression(term, 0);
-                if (!tryConsume(Token.CloseParen)) {
-                    throw new RuntimeException("Expected ')'");
-                }
-            } 
-            else {
-                innerTerm = new NodeExpression.Term(parseTerm());
+            while (peek().is(TokenType.BinaryArithmetic) && (
+                (peek().precedence > op.precedence) || 
+                (peek().precedence >= op.precedence && peek().rightassoc))) {
+                right = parseExpression(right, op.precedence + (peek().precedence > op.precedence ? 1 : 0));
             }
-
-            if (op == Token.Not) {
-                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Not);
-            }
-            else if (op == Token.Tilde) {
-                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Invert);
-            }
-            else if (op == Token.Hyphen) {
-                return new NodeExpression.Unary(innerTerm, NodeExpression.Unary.Operator.Negate);
-            }
-            else {
-                throw new RuntimeException("Unsupported unary operation: " + op);
-            }
+            left = arthmeticNode(op, left, right);
         }
 
-        if (term == null) {
-            NodeTerm atom = parseTerm();
-            term = new NodeExpression.Term(atom);
-        }
-        
-        while (peek().is(TokenType.BinaryArithmetic)) {
-            if (peek().precedence > prec) {
-                term = parseExpression(term, peek().precedence);
-                continue;
-            } 
-
-            final Token op = consume();
-            final NodeTerm otherAtom = parseTerm();
-            if (otherAtom == null) {
-                throw new RuntimeException("Expected term");
-            }
-
-            NodeExpression other = new NodeExpression.Term(otherAtom);
-            if (peek().is(TokenType.BinaryArithmetic) || peek().precedence < prec) {
-                return arthmeticNode(op, term, other);
-            } else while (peek().is(TokenType.BinaryArithmetic) && peek().precedence > prec) {
-                other = parseExpression(other, peek().precedence);
-            }
-            term = arthmeticNode(op, term, other);
-        }
-
-        return term;
+        return left;
     }
 
-    /*
-     * Helper function that assigns the correct arithmetic node
-     */
     private NodeExpression arthmeticNode(Token op, NodeExpression lhs, NodeExpression rhs) {
-        if (op == Token.Plus) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Add, lhs, rhs);
-        else if (op == Token.Hyphen) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Subtract, lhs, rhs);
-        else if (op == Token.Asterisk) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Multiply, lhs, rhs);
-        else if (op == Token.ForwardSlash) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Divide, lhs, rhs);
-        else if (op == Token.Percent) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Modulo, lhs, rhs);
-        else if (op == Token.Caret) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Exponent, lhs, rhs);
-        else if (op == Token.Greater) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Greater, lhs, rhs);
-        else if (op == Token.GreaterEqual) return new NodeExpression.Binary(NodeExpression.Binary.Operator.GreaterEqual, lhs, rhs);
-        else if (op == Token.Less) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Less, lhs, rhs);
-        else if (op == Token.LessEqual) return new NodeExpression.Binary(NodeExpression.Binary.Operator.LessEqual, lhs, rhs);
-        else if (op == Token.Equals) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Equal, lhs, rhs);
-        else if (op == Token.NotEquals) return new NodeExpression.Binary(NodeExpression.Binary.Operator.NotEqual, lhs, rhs);
-        else if (op == Token.And) return new NodeExpression.Binary(NodeExpression.Binary.Operator.And, lhs, rhs);
-        else if (op == Token.Or) return new NodeExpression.Binary(NodeExpression.Binary.Operator.Or, lhs, rhs);
+        if (op == Token.Plus)                   return new NodeExpression.Binary(BinaryOperator.Add, lhs, rhs);
+        else if (op == Token.Hyphen)            return new NodeExpression.Binary(BinaryOperator.Subtract, lhs, rhs);
+        else if (op == Token.Asterisk)          return new NodeExpression.Binary(BinaryOperator.Multiply, lhs, rhs);
+        else if (op == Token.ForwardSlash)      return new NodeExpression.Binary(BinaryOperator.Divide, lhs, rhs);
+        else if (op == Token.Percent)           return new NodeExpression.Binary(BinaryOperator.Modulo, lhs, rhs);
+        else if (op == Token.Caret)             return new NodeExpression.Binary(BinaryOperator.Exponent, lhs, rhs);
+        else if (op == Token.Greater)           return new NodeExpression.Binary(BinaryOperator.Greater, lhs, rhs);
+        else if (op == Token.GreaterEqual)      return new NodeExpression.Binary(BinaryOperator.GreaterEqual, lhs, rhs);
+        else if (op == Token.Less)              return new NodeExpression.Binary(BinaryOperator.Less, lhs, rhs);
+        else if (op == Token.LessEqual)         return new NodeExpression.Binary(BinaryOperator.LessEqual, lhs, rhs);
+        else if (op == Token.Equals)            return new NodeExpression.Binary(BinaryOperator.Equal, lhs, rhs);
+        else if (op == Token.NotEquals)         return new NodeExpression.Binary(BinaryOperator.NotEqual, lhs, rhs);
+        else if (op == Token.And)               return new NodeExpression.Binary(BinaryOperator.And, lhs, rhs);
+        else if (op == Token.Or)                return new NodeExpression.Binary(BinaryOperator.Or, lhs, rhs);
         else {
             throw new RuntimeException("Unsupported arithmetic operation: " + peek().value);
+        }
+    }
+
+    private NodeExpression arthmeticNode(Token op, NodeExpression val) {
+        if (op == Token.Hyphen) return new NodeExpression.Unary(UnaryOperator.Negate, val);
+        else if (op == Token.Tilde) return new NodeExpression.Unary(UnaryOperator.Invert, val);
+        else if (op == Token.Not) return new NodeExpression.Unary(UnaryOperator.Not, val);
+        else {
+            throw new RuntimeException("Unsupported unary arithmetic operation: " + peek().value);
         }
     }
 
@@ -168,6 +120,35 @@ public class Parser {
      * 
      * Atom -> ([Term]) | [Variable] | [Literal]
      */
+
+    private NodeExpression parseAtom() {
+        if (tryConsume(Token.OpenParen)) {
+            NodeExpression exp = parseExpression();
+            if (!tryConsume(Token.CloseParen)) {
+                throw new RuntimeException("Expected ')'");
+            } else if (exp == null) {
+                throw new RuntimeException("Unparsable/Invalid expression");
+            }
+            return exp;
+        } else if (peek().is(TokenType.UnaryArithmetic)) {
+            final Token op = consume();
+            final NodeExpression expr = parseAtom();
+            
+            if (expr == null) {
+                throw new RuntimeException("Unsupported unary operation: " + op);
+            }
+            return arthmeticNode(op, expr);
+        }
+        else {
+            final NodeTerm atom = parseTerm();
+            if (atom == null) {
+                return null;
+            }
+            else {
+                return new NodeExpression.Term(atom);
+            }
+        }
+    }
 
     private NodeTerm parseTerm() {
         final NodeLiteral<?> lit;
@@ -300,7 +281,6 @@ interface NodeStatement {
         
         public Object host(Visitor visitor) { return visitor.visit(this); }
 
-        
         public String toString() {
             return "StmtAssign: { " + qualifier + "=" + expression + " }";
         } 
@@ -327,29 +307,33 @@ interface NodeStatement {
     }
 }
 
+enum BinaryOperator {                               // Precedence
+    Exponent,                                       // 8
+    Multiply, Divide, Modulo,                       // 7
+    Add, Subtract,                                  // 6
+    ShiftLeft, ShiftRight,                          // 5
+    Less, LessEqual, Greater, GreaterEqual,         // 4
+    Equal, NotEqual,                                // 3
+    BitAnd, BitOr, BitXor,                          // 2
+    And, Or                                         // 1
+}
+
+enum UnaryOperator {
+    Increment, Decrement, Negate, Invert, Not
+}
+
 interface NodeExpression {
     class Binary implements NodeExpression {
         public final NodeExpression lhs, rhs;
-        public final Operator op;
+        public final BinaryOperator op;
     
-        Binary(Operator op, NodeExpression lhs, NodeExpression rhs) {
+        Binary(BinaryOperator op, NodeExpression lhs, NodeExpression rhs) {
             this.op = op;
             this.lhs = lhs;
             this.rhs = rhs;
         }
 
         public <R> R host(Visitor<R> visitor) { return visitor.visit(this); }
-
-        enum Operator {                                 // Precedence
-            Exponent,                                       // 8
-            Multiply, Divide, Modulo,                       // 7
-            Add, Subtract,                                  // 6
-            ShiftLeft, ShiftRight,                          // 5
-            Less, LessEqual, Greater, GreaterEqual,         // 4
-            Equal, NotEqual,                                // 3
-            BitAnd, BitOr, BitXor,                          // 2
-            And, Or                                         // 1
-        }
 
         public String toString() {
             return "ExprBin: { " + lhs + " " + op + " " + rhs + " }";
@@ -358,20 +342,15 @@ interface NodeExpression {
     
     class Unary implements NodeExpression {
         public final NodeExpression val;
-        public final Operator op;
+        public final UnaryOperator op;
     
-        Unary(NodeExpression val, Operator op) {
+        Unary(UnaryOperator op, NodeExpression val) {
             this.op = op;
             this.val = val;
         }
 
         public <R> R host(Visitor<R> visitor) {
             return visitor.visit(this);
-        }
-
-        enum Operator {
-            Increment, Decrement,
-            Negate, Invert, Not
         }
         
         public String toString() {

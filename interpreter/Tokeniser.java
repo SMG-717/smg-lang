@@ -98,14 +98,12 @@ public class Tokeniser {
                     }
 
                     else {
-                        switch (bufferValue) {
-                            case "and": return Token.And;
-                            case "or": return Token.Or;
-                            case "not": return Token.Not;
-                            case "empty": return Token.Empty;
-                            case "true": return Token.True;
-                            case "false": return Token.False;
-                            default: return Token.makeToken(bufferValue, TokenType.Qualifier);
+                        final Token keyword = getKeyword(bufferValue);
+                        if (keyword != null) {
+                            return keyword;
+                        }
+                        else {
+                            return Token.makeToken(bufferValue, TokenType.Qualifier);
                         }
                     }
                 }
@@ -175,6 +173,28 @@ public class Tokeniser {
     private Token consumeSingleCharToken() {
         for (Token t : singles) {
             if (tryConsumeChar(t)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    private static final List<Token> keywords = List.of(
+        Token.Empty,
+        Token.If,
+        Token.Else,
+        Token.Let,
+        Token.True,
+        Token.False,
+        Token.And,
+        Token.Not,
+        Token.Xor,
+        Token.Or
+    );
+
+    private Token getKeyword(String value) {
+        for (Token t : keywords) {
+            if (t.value.equals(value)) {
                 return t;
             }
         }
@@ -257,16 +277,16 @@ class Token {
     public final String value;
     public final Set<TokenType> types;
     public final int precedence;
+    public final boolean rightassoc;
 
     public static final Token Empty = new Token("empty", TokenType.Keyword);
     public static final Token If = new Token("if", TokenType.Keyword);
     public static final Token Else = new Token("else", TokenType.Keyword);
     public static final Token Let = new Token("let", TokenType.Keyword);
-
     public static final Token True = new Token("true", TokenType.BooleanLiteral);
     public static final Token False = new Token("false", TokenType.BooleanLiteral);
     
-    public static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8);
+    public static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8, true);
     public static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);
     public static final Token ForwardSlash = new Token("/", TokenType.BinaryArithmetic, 7);
     public static final Token Percent = new Token("%", TokenType.BinaryArithmetic, 7);
@@ -314,16 +334,23 @@ class Token {
         this(val, type, 0);
     }
 
+    private Token(String val, TokenType type, int precedence, boolean rightassoc) {
+        this(val, Set.of(type), precedence, rightassoc);
+    }
+
     private Token(String val, TokenType type, int precedence) {
-        this.value = val;
-        this.types = Set.of(type);
-        this.precedence = precedence;
+        this(val, Set.of(type), precedence, false);
     }
 
     private Token(String val, Set<TokenType> types, int precedence) {
+        this(val, types, precedence, false);
+    }
+
+    private Token(String val, Set<TokenType> types, int precedence, boolean rightassoc) {
         this.value = val;
         this.types = Set.copyOf(types);
         this.precedence = precedence;
+        this.rightassoc = rightassoc;
     }
 
     boolean hasValue() {

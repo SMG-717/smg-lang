@@ -22,10 +22,6 @@ public class Main {
 
         final List<List<Object>> expressions = List.of(
 
-            // Temp cases
-
-            // List.of("(1 + 2 + 3) * 100 * 4 / (30 + 5 ^ 2 - 5) = 24 * 2", true), // Currently Code Breaking
-
             // Test cases
             List.of("true", true),
             List.of("false", false),
@@ -40,6 +36,8 @@ public class Main {
             List.of("1 - 1 = 0", true),
             List.of("1 + 2 = 3", true),
             List.of("49 / 7 = 7", true),
+            List.of("2 ^ 3 ^ 4 = 2417851639229258349412352", true),
+            List.of("2 ^ 3 ^ 4 != 4096", true),
             List.of("2 * 3 = 6", true),
             List.of("3 ^ 4 = 81", true),
             List.of("3 ^ 4 * 2 + 1 = 163", true),
@@ -93,16 +91,14 @@ public class Main {
         for (List<Object> test : expressions) {
             final String expression = (String) test.get(0);
             boolean success = false; 
+            Interpreter intr = null;
             
-            if (test.get(1) == ERROR) {
-                // Expecting error
-                try {
-                    new Interpreter(expression, vars).interpret();
-                } catch (Exception e) {
-                    success = true;
-                }
-            } else {
-                success = new Interpreter(expression, vars).interpret() == (Boolean) test.get(1);
+            try {
+                intr = new Interpreter(expression, vars);
+                intr.interpret();
+                success = intr.interpret() == (Boolean) test.get(1) && test.get(1) != ERROR;
+            } catch (Exception e) {
+                success = test.get(1) == ERROR;
             }
 
             count += success ? 1 : 0;
@@ -111,6 +107,7 @@ public class Main {
                 expression == code ? "[Code from file: " + file + "]" : expression,
                 (success ? green("PASS") : red("FAIL"))
             ));
+            // System.out.println("Tree -> " + (intr.getTree() != null ? intr.getTree() : "None"));
         }
         final String marks = String.format("%d/%d", count, expressions.size());
         System.out.println("Total: " + (count == expressions.size() ? green(marks) : red(marks)));
