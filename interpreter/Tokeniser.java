@@ -55,6 +55,15 @@ public class Tokeniser {
                 }
             }
 
+            else if (state == "Comment") {
+                if (tryConsumeChar(Token.Newline)) {
+                    return Token.makeToken(buffer.toString(), TokenType.Comment);
+                }
+                else {
+                    buffer.append(consumeChar());
+                }
+            }
+
             // Building a Qualifier or Keyword
             else if (peekChar() == '_' || alpha(peekChar()) || (alphanum(peekChar()) && state == "Word")) {
                 buffer.append(consumeChar());     
@@ -89,7 +98,6 @@ public class Tokeniser {
                 if (buffer.length() > 0) {
                     final String bufferValue = buffer.toString();
                     if (state == "Number") {
-                        // this.answer |= bufferValue.equals("42"); // Life, The Universe, and Everything
                         return Token.makeToken(bufferValue, TokenType.NumberLiteral);
                     }
 
@@ -108,40 +116,25 @@ public class Tokeniser {
                     }
                 }
 
-                // Otherwise, token could be an operator or punctuation token
+                // Otherwise, token could be a single character operator or punctuation token
                 final Token singleChar = consumeSingleCharToken();
                 if (singleChar != null) return singleChar;
 
+                // Otherwise, The token could be a single or double character operator
                 else if (tryConsumeChar(Token.Less)) {
-                    if (tryConsumeChar(Token.EqualSign)) {
-                        return Token.LessEqual;
-                    } else {
-                        return Token.Less;
-                    }
+                    return tryConsumeChar(Token.EqualSign) ? Token.LessEqual : Token.Less;
                 }
 
                 else if (tryConsumeChar(Token.EqualSign)) {
-                    if (tryConsumeChar(Token.EqualSign)) {
-                        return Token.Equals;
-                    } else {
-                        return Token.EqualSign;
-                    }
+                    return tryConsumeChar(Token.EqualSign) ? Token.Equals : Token.EqualSign;
                 }
 
                 else if (tryConsumeChar(Token.Greater)) {
-                    if (tryConsumeChar(Token.EqualSign)) {
-                        return Token.GreaterEqual;
-                    } else {
-                        return Token.Greater;
-                    }
+                    return tryConsumeChar(Token.EqualSign) ? Token.GreaterEqual : Token.Greater;
                 }
 
                 else if (tryConsumeChar(Token.Exclaim)) {
-                    if (tryConsumeChar(Token.EqualSign)) {
-                        return Token.NotEquals;
-                    } else {
-                        return Token.Exclaim;
-                    }
+                    return tryConsumeChar(Token.EqualSign) ? Token.NotEquals : Token.Exclaim;
                 }
 
                 // Otherwise, token could signal the start of a string literal
@@ -151,6 +144,11 @@ public class Tokeniser {
 
                 else if (tryConsumeChar(Token.SingleQuote)) {
                     state = "String Literal Single";
+                }
+
+                // Otherwise, token could be a commant
+                else if (tryConsumeChar(Token.Hashtag)) {
+                    state = "Comment";
                 }
 
                 // Otherwise, token is a space and can be ignored.
@@ -173,9 +171,9 @@ public class Tokeniser {
     // List of all single character tokens for simplicity.
     private static final List<Token> singles = List.of(
         Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, Token.Asterisk, Token.ForwardSlash, Token.Percent, 
-        Token.Caret, Token.At, Token.Underscore, Token.Hashtag, Token.Question, Token.Comma, Token.Colon, 
-        Token.Period, Token.Semi, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, 
-        Token.OpenSquare, Token.CloseSquare
+        Token.Caret, Token.At, Token.Underscore, Token.Question, Token.Comma, Token.Colon, Token.Newline, Token.Period, 
+        Token.SemiColon, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, Token.OpenSquare, 
+        Token.CloseSquare
     );
 
     private Token consumeSingleCharToken() {
@@ -191,6 +189,7 @@ public class Tokeniser {
         Token.Empty,
         Token.If,
         Token.Else,
+        Token.While,
         Token.Let,
         Token.True,
         Token.False,
@@ -267,7 +266,7 @@ public class Tokeniser {
  * the current implementation of the Tokeniser.
  */
 enum TokenType{
-    Qualifier, Keyword, Punctuation, WhiteSpace,
+    Qualifier, Keyword, Punctuation, WhiteSpace, Comment,
     NumberLiteral, StringLiteral, BooleanLiteral, DateLiteral, 
     BinaryArithmetic, UnaryArithmetic;
 }
@@ -290,6 +289,7 @@ class Token {
     public static final Token Empty = new Token("empty", TokenType.Keyword);
     public static final Token If = new Token("if", TokenType.Keyword);
     public static final Token Else = new Token("else", TokenType.Keyword);
+    public static final Token While = new Token("while", TokenType.Keyword);
     public static final Token Let = new Token("let", TokenType.Keyword);
     public static final Token True = new Token("true", TokenType.BooleanLiteral);
     public static final Token False = new Token("false", TokenType.BooleanLiteral);
@@ -324,7 +324,7 @@ class Token {
     public static final Token Comma = new Token(",", TokenType.Punctuation);
     public static final Token Colon = new Token(":", TokenType.Punctuation);
     public static final Token Period = new Token(".", TokenType.Punctuation);
-    public static final Token Semi = new Token(";", TokenType.Punctuation);
+    public static final Token SemiColon = new Token(";", TokenType.Punctuation);
     public static final Token BackSlash = new Token("\\", TokenType.Punctuation);
     public static final Token OpenParen = new Token("(", TokenType.Punctuation);
     public static final Token CloseParen = new Token(")", TokenType.Punctuation);
@@ -335,6 +335,11 @@ class Token {
     public static final Token DoubleQuote = new Token("\"", TokenType.Punctuation);
     public static final Token SingleQuote = new Token("\'", TokenType.Punctuation);
     public static final Token EqualSign = new Token("=", TokenType.Punctuation);
+
+    public static final Token Newline = new Token("\n", TokenType.WhiteSpace);
+    public static final Token CarriageReturn = new Token("\r", TokenType.WhiteSpace);
+    public static final Token Tab = new Token("\t", TokenType.WhiteSpace);
+    public static final Token BackSpace = new Token("\b", TokenType.WhiteSpace);
 
     public static final Token EOT = Token.makeToken("End", TokenType.Keyword);
     public static final char EOF = '\0';

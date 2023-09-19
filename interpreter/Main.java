@@ -105,7 +105,8 @@ public class Main {
                 expression == code ? "[Code from file: " + file + "]" : expression,
                 (success ? green("PASS") : red("FAIL"))
             );
-            if (!success) fails.append(testResult);
+            if (!success) 
+                fails.append(testResult);
             // System.out.println("Tree -> " + (intr.getTree() != null ? intr.getTree() : "None"));
         }
         final String marks = String.format("%d/%d", count, expressions.size());

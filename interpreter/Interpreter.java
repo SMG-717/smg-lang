@@ -2,6 +2,8 @@ package interpreter;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 
 public class Interpreter {
@@ -19,7 +21,7 @@ public class Interpreter {
      */
 
 
-    private final Map<String, Object> variables;
+    private final LinkedList<Map<String, Object>> scopes;
     private final Parser parser;
     private Object lastResult;
 
@@ -29,7 +31,8 @@ public class Interpreter {
     
     public Interpreter(String input, Map<String, Object> variables) {
         this.parser = new Parser(input);
-        this.variables = new HashMap<>(variables);
+        this.scopes = new LinkedList<>();
+        scopes.add(new HashMap<>(variables));
     }
 
     /**
@@ -38,24 +41,54 @@ public class Interpreter {
      * Crucial for the execution of the interpreter when variables are involved.
      */
     public Interpreter addVariable(String key, Object value) {
-        variables.put(key, value);
+        // variables.put(key, value);
+
+        final Map<String, Object> scope = findVariable(key);
+
+        if (scope != null) {
+            scope.put(key, value);
+        } else {
+            scopes.getLast().put(key, value);
+        }
         return this;
     }
 
     public Object getVariable(String key) {
-
-        if (!variables.containsKey(key)) {
+        final Map<String, Object> scope = findVariable(key);
+        if (scope == null) {
             throw new RuntimeException("Variable " + key + " is undefined");
         }
-        return variables.get(key);
+        else {
+            return scope.get(key);
+        }   
     }
 
     public boolean defined(String key) {
-        return variables.containsKey(key);
+        return findVariable(key) != null;
+    }
+
+    public Map<String, Object> findVariable(String key) {
+
+        Iterator<Map<String, Object>> itr = scopes.descendingIterator();
+        while (itr.hasNext()) {
+            final Map<String, Object> scope = itr.next();
+            if (scope.containsKey(key)) {
+                return scope;
+            }
+        }
+        return null;
+    }
+
+    private void enterScope() {
+        scopes.add(new HashMap<>());
+    }
+
+    private void exitScope() {
+        scopes.removeLast();
     }
 
     public Interpreter clearVariables() {
-        variables.clear();
+        scopes.clear();
         return this;
     }
 
@@ -72,13 +105,16 @@ public class Interpreter {
     public Object interpret() {
         if (parser.getRoot() == null)
             parser.parse();
-        return interpretProgram(parser.getRoot());
+        return interpretScope(parser.getRoot());
     }
 
-    public Object interpretProgram(NodeProgram program) {
-        for (NodeStatement statement : program.statements) {
+    public Object interpretScope(NodeScope scope) {
+
+        enterScope();
+        for (NodeStatement statement : scope.statements) {
             lastResult = interpretStatement(statement);
         }
+        exitScope();
 
         return lastResult;
     }
@@ -107,6 +143,29 @@ public class Interpreter {
 
         public Object visit(NodeStatement.Expression expression) {
             return interpretExpression(expression.expression);
+        }
+
+        public Object visit(NodeStatement.If ifStmt) {
+            if ((Boolean) interpretExpression(ifStmt.expression)) {
+                return interpretScope(ifStmt.success);
+            }
+            else if (ifStmt.fail != null) {
+                return interpretScope(ifStmt.fail);
+            }
+            else {
+                return null;
+            }
+        }
+        
+        public Object visit(NodeStatement.While whileStmt) {
+            while ((Boolean) interpretExpression(whileStmt.expression)) {
+                interpretScope(whileStmt.scope);
+            }
+            return null;
+        }
+        
+        public Object visit(NodeStatement.Scope scope) {
+            return interpretScope(scope.scope);
         }
     };
 

@@ -12,7 +12,7 @@ public class Parser {
     
     private final List<Token> cache;
     private final Tokeniser tokeniser;
-    private NodeProgram root = null;
+    private NodeScope root = null;
 
     public Parser(Tokeniser tokeniser) {
         this.tokeniser = tokeniser;
@@ -27,9 +27,9 @@ public class Parser {
     /***************************************************************************
      * Parser
      **************************************************************************/
-    public NodeProgram parse() {
+    public NodeScope parse() {
         tokeniser.reset();
-        root = parseProgram();
+        root = parseScope();
 
         if (peek() != Token.EOT) {
             throw new RuntimeException("Unexpected token at End of Expression: " + peek().value);
@@ -37,24 +37,44 @@ public class Parser {
         return root;
     }
 
-    private NodeProgram parseProgram() {
+    private NodeScope parseScope() {
 
         List<NodeStatement> statements = new ArrayList<>();
         while (peek() != Token.EOT) {
+            
+            while (peek() == Token.Newline || 
+                    peek() == Token.SemiColon || 
+                    peek().is(TokenType.Comment)) 
+                consume();
+            
+            if (peek() == Token.CloseCurly)
+                break;
+
             NodeStatement statement = parseStatement();
             if (statement == null) {
                 throw new RuntimeException("Incomplete/Unparsable statement");
             }
+            else if (peek() != Token.Newline && 
+                    peek() != Token.SemiColon && 
+                    peek() != Token.EOT && 
+                    peek() != Token.CloseCurly && 
+                    !peek().is(TokenType.Comment)) {
+                throw new RuntimeException("Statement must end in a termination character ('\\n', or ';' or EOT)");
+            }
+
+            
             statements.add(statement);
+
+            // if (peek() == Token.CloseCurly)
+            //     break;
         }
 
-        return new NodeProgram(statements);
+        return new NodeScope(statements);
     }
 
     private NodeStatement parseStatement() {
 
         if (tryConsume(Token.Let)) {
-            
             final NodeVariable var = parseVariable();
             if (var == null) {
                 throw new RuntimeException("Expected qualifier: " + peek().value);
@@ -68,15 +88,60 @@ public class Parser {
             
         }
 
+        else if (tryConsume(Token.If)) {
+            final NodeExpression expr = parseExpression();
+            if (expr == null) {
+                throw new RuntimeException("Expected if statement expression.");
+            }
+
+            final NodeScope scope, scopeElse;
+            
+            tryConsume(Token.OpenCurly, "Expected '{'");
+            scope = parseScope();
+            if (scope == null) {
+                throw new RuntimeException("Unparsable Scope.");
+            }
+            tryConsume(Token.CloseCurly, "Expected '}'");
+            
+            if (tryConsume(Token.Else)) {
+                tryConsume(Token.OpenCurly, "Expected '{'");
+                scopeElse = parseScope();
+                if (scopeElse == null) {
+                    throw new RuntimeException("Unparsable Scope.");
+                }
+                tryConsume(Token.CloseCurly, "Expected '}'");
+            }
+            else {
+                scopeElse = null;
+            }
+            return new NodeStatement.If(expr, scope, scopeElse);
+        }
+
+        else if (tryConsume(Token.While)) {
+            final NodeExpression expr = parseExpression();
+            if (expr == null) {
+                throw new RuntimeException("Expected while statement expression.");
+            }
+
+            final NodeScope scope;
+            
+            tryConsume(Token.OpenCurly, "Expected '{'");
+            scope = parseScope();
+            if (scope == null) {
+                throw new RuntimeException("Unparsable Scope.");
+            }
+            tryConsume(Token.CloseCurly, "Expected '}'");
+            return new NodeStatement.While(expr, scope);
+        }
+
         else if (peek().is(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
 
             final NodeVariable var = parseVariable();
             if (var == null) {
                 throw new RuntimeException("Expected qualifier: " + peek().value);
             }
-            else if (!tryConsume(Token.EqualSign)) {
-                throw new RuntimeException("Expected '='");
-            }
+
+            tryConsume(Token.EqualSign, "Expected '='");
             
             final NodeExpression expr = parseExpression();
             return expr == null ? null : new NodeStatement.Assign(var, expr);
@@ -149,16 +214,14 @@ public class Parser {
     private NodeExpression parseAtom() {
         if (tryConsume(Token.OpenParen)) {
             NodeExpression exp = parseExpression();
-            if (!tryConsume(Token.CloseParen)) {
-                throw new RuntimeException("Expected ')'");
-            } else if (exp == null) {
+            tryConsume(Token.CloseParen, "Expected ')'");
+            if (exp == null) {
                 throw new RuntimeException("Unparsable/Invalid expression");
             }
             return exp;
         } else if (peek().is(TokenType.UnaryArithmetic)) {
             final Token op = consume();
             final NodeExpression expr = parseAtom();
-            
             if (expr == null) {
                 throw new RuntimeException("Unsupported unary operation: " + op);
             }
@@ -276,24 +339,81 @@ public class Parser {
         return success;
     }
 
-    public NodeProgram getRoot() {
+    private void tryConsume(Token token, String message) {
+        if (!tryConsume(token)) {
+            throw new RuntimeException(message);
+        }
+    }
+
+    public NodeScope getRoot() {
         return root;
     }
 }
 
-class NodeProgram {
+class NodeScope {
     public final List<NodeStatement> statements;
 
-    NodeProgram(List<NodeStatement> statements) {
+    NodeScope(List<NodeStatement> statements) {
         this.statements = List.copyOf(statements);
     }
 
     public String toString() {
-        return "Program: { " + String.join(", ", statements.stream().map(x -> x.toString()).collect(Collectors.toList())) + " }";
+        return "Scope: { " + String.join(", ", statements.stream().map(x -> x.toString()).collect(Collectors.toList())) + " }";
     }
 }
 
 interface NodeStatement {
+    class If implements NodeStatement {
+    
+        public final NodeExpression expression;
+        public final NodeScope success; 
+        public final NodeScope fail; 
+    
+        If(NodeExpression expression, NodeScope success, NodeScope fail) {
+            this.expression = expression;
+            this.success = success;
+            this.fail = fail;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtIf: if " + expression + " then " + success + " else " + fail + " }";
+        } 
+    }
+
+    class While implements NodeStatement {
+    
+        public final NodeExpression expression;
+        public final NodeScope scope; 
+    
+        While(NodeExpression expression, NodeScope scope) {
+            this.expression = expression;
+            this.scope = scope;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtWhile: while " + expression + " do " + scope + " }";
+        } 
+    }
+
+    class Scope implements NodeStatement {
+    
+        public final NodeScope scope; 
+    
+        Scope(NodeScope scope) {
+            this.scope = scope;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtScope: " + scope + " }";
+        } 
+    }
+
     class Declare implements NodeStatement {
     
         public final NodeVariable qualifier;
@@ -307,7 +427,7 @@ interface NodeStatement {
         public Object host(Visitor visitor) { return visitor.visit(this); }
 
         public String toString() {
-            return "StmtAssign: { " + qualifier + "=" + expression + " }";
+            return "StmtDeclare: { " + qualifier + "=" + expression + " }";
         } 
     }
 
@@ -347,6 +467,9 @@ interface NodeStatement {
         Object visit(Assign assignment);
         Object visit(Declare declaration);
         Object visit(Expression expression);
+        Object visit(If expression);
+        Object visit(While expression);
+        Object visit(Scope expression);
     }
 }
 
