@@ -1,7 +1,7 @@
 Praser syntax:
 
 Program     -> [Statement]*
-Statement   -> let [Variable] = [Expression] | [Expression]
+Statement   -> let [Variable] = [Expression] | [Variable] = [Expression] | [Expression]
 Expression  -> [Term] | [Term] [Operator] [Term]         
 Term        -> ([Term]) | [Literal] | [Variable]
 Literal     -> [BooleanLiteral] | [StringLiteral] | [NumberLiteral] | [DateLiteral]

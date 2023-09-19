@@ -54,7 +54,32 @@ public class Parser {
     private NodeStatement parseStatement() {
 
         if (tryConsume(Token.Let)) {
-            throw new RuntimeException("Unsupported operation: let");
+            
+            final NodeVariable var = parseVariable();
+            if (var == null) {
+                throw new RuntimeException("Expected qualifier: " + peek().value);
+            }
+            else if (!tryConsume(Token.EqualSign)) {
+                throw new RuntimeException("Expected '='");
+            }
+
+            final NodeExpression expr = parseExpression();
+            return expr == null ? null : new NodeStatement.Declare(var, expr);
+            
+        }
+
+        else if (peek().is(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
+
+            final NodeVariable var = parseVariable();
+            if (var == null) {
+                throw new RuntimeException("Expected qualifier: " + peek().value);
+            }
+            else if (!tryConsume(Token.EqualSign)) {
+                throw new RuntimeException("Expected '='");
+            }
+            
+            final NodeExpression expr = parseExpression();
+            return expr == null ? null : new NodeStatement.Assign(var, expr);
         }
 
         final NodeExpression expr = parseExpression();
@@ -269,12 +294,29 @@ class NodeProgram {
 }
 
 interface NodeStatement {
-    class Assignment implements NodeStatement {
+    class Declare implements NodeStatement {
     
         public final NodeVariable qualifier;
         public final NodeExpression expression;
     
-        Assignment(NodeVariable qualifier, NodeExpression expression) {
+        Declare(NodeVariable qualifier, NodeExpression expression) {
+            this.qualifier = qualifier;
+            this.expression = expression;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtAssign: { " + qualifier + "=" + expression + " }";
+        } 
+    }
+
+    class Assign implements NodeStatement {
+    
+        public final NodeVariable qualifier;
+        public final NodeExpression expression;
+    
+        Assign(NodeVariable qualifier, NodeExpression expression) {
             this.qualifier = qualifier;
             this.expression = expression;
         }
@@ -302,7 +344,8 @@ interface NodeStatement {
 
     Object host(Visitor visitor);
     interface Visitor {
-        Object visit(Assignment assignment);
+        Object visit(Assign assignment);
+        Object visit(Declare declaration);
         Object visit(Expression expression);
     }
 }

@@ -113,15 +113,23 @@ public class Tokeniser {
                 if (singleChar != null) return singleChar;
 
                 else if (tryConsumeChar(Token.Less)) {
-                    if (tryConsumeChar(Token.Equals)) {
+                    if (tryConsumeChar(Token.EqualSign)) {
                         return Token.LessEqual;
                     } else {
                         return Token.Less;
                     }
                 }
 
+                else if (tryConsumeChar(Token.EqualSign)) {
+                    if (tryConsumeChar(Token.EqualSign)) {
+                        return Token.Equals;
+                    } else {
+                        return Token.EqualSign;
+                    }
+                }
+
                 else if (tryConsumeChar(Token.Greater)) {
-                    if (tryConsumeChar(Token.Equals)) {
+                    if (tryConsumeChar(Token.EqualSign)) {
                         return Token.GreaterEqual;
                     } else {
                         return Token.Greater;
@@ -129,7 +137,7 @@ public class Tokeniser {
                 }
 
                 else if (tryConsumeChar(Token.Exclaim)) {
-                    if (tryConsumeChar(Token.Equals)) {
+                    if (tryConsumeChar(Token.EqualSign)) {
                         return Token.NotEquals;
                     } else {
                         return Token.Exclaim;
@@ -165,7 +173,7 @@ public class Tokeniser {
     // List of all single character tokens for simplicity.
     private static final List<Token> singles = List.of(
         Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, Token.Asterisk, Token.ForwardSlash, Token.Percent, 
-        Token.Caret, Token.Equals, Token.At, Token.Underscore, Token.Hashtag, Token.Question, Token.Comma, Token.Colon, 
+        Token.Caret, Token.At, Token.Underscore, Token.Hashtag, Token.Question, Token.Comma, Token.Colon, 
         Token.Period, Token.Semi, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, 
         Token.OpenSquare, Token.CloseSquare
     );
@@ -298,7 +306,7 @@ class Token {
     public static final Token Less = new Token("<", TokenType.BinaryArithmetic, 4);
     public static final Token GreaterEqual = new Token(">=", TokenType.BinaryArithmetic, 4);
     public static final Token LessEqual = new Token("<=", TokenType.BinaryArithmetic, 4);
-    public static final Token Equals = new Token("=", TokenType.BinaryArithmetic, 3);
+    public static final Token Equals = new Token("==", TokenType.BinaryArithmetic, 3);
     public static final Token NotEquals = new Token("!=", TokenType.BinaryArithmetic, 3);
     public static final Token Ampersand = new Token("&", TokenType.BinaryArithmetic, 2);
     public static final Token Pipe = new Token("|", TokenType.BinaryArithmetic, 2);
@@ -326,6 +334,7 @@ class Token {
     public static final Token CloseSquare = new Token("]", TokenType.Punctuation);
     public static final Token DoubleQuote = new Token("\"", TokenType.Punctuation);
     public static final Token SingleQuote = new Token("\'", TokenType.Punctuation);
+    public static final Token EqualSign = new Token("=", TokenType.Punctuation);
 
     public static final Token EOT = Token.makeToken("End", TokenType.Keyword);
     public static final char EOF = '\0';

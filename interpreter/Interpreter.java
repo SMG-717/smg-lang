@@ -4,12 +4,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import interpreter.NodeExpression.Binary;
-import interpreter.NodeExpression.Term;
-import interpreter.NodeExpression.Unary;
-import interpreter.NodeStatement.Assignment;
-import interpreter.NodeStatement.Expression;
-
 public class Interpreter {
 
     /**
@@ -35,7 +29,7 @@ public class Interpreter {
     
     public Interpreter(String input, Map<String, Object> variables) {
         this.parser = new Parser(input);
-        this.variables = variables;
+        this.variables = new HashMap<>(variables);
     }
 
     /**
@@ -54,6 +48,10 @@ public class Interpreter {
             throw new RuntimeException("Variable " + key + " is undefined");
         }
         return variables.get(key);
+    }
+
+    public boolean defined(String key) {
+        return variables.containsKey(key);
     }
 
     public Interpreter clearVariables() {
@@ -86,13 +84,29 @@ public class Interpreter {
     }
 
     private final NodeStatement.Visitor statementVisitor = new NodeStatement.Visitor() {
+        public Object visit(NodeStatement.Assign assignment) {
+            if (!defined(assignment.qualifier.name)) {
+                throw new RuntimeException("Assignment to an undefined variable: " + assignment.qualifier.name);
+            }
 
-        public Object visit(Assignment assignment) {
-            throw new UnsupportedOperationException("Unimplemented method 'visit'");
+            final Object value = interpretExpression(assignment.expression);
+            addVariable(assignment.qualifier.name, value);
+            return value;
         }
 
-        public Object visit(Expression expression) {
-            return interpretBexpr(expression.expression);
+        public Object visit(NodeStatement.Declare declaration) {
+
+            if (defined(declaration.qualifier.name)) {
+                throw new RuntimeException("Redefining an existing variable: " + declaration.qualifier.name);
+            }
+            
+            final Object value = interpretExpression(declaration.expression);
+            addVariable(declaration.qualifier.name, value);
+            return value;
+        }
+
+        public Object visit(NodeStatement.Expression expression) {
+            return interpretExpression(expression.expression);
         }
     };
 
@@ -111,10 +125,10 @@ public class Interpreter {
 
     final NodeExpression.Visitor<Object> nodeExpressionVisitor = new NodeExpression.Visitor<Object>() {
         @Override
-        public Object visit(Binary node) {
+        public Object visit(NodeExpression.Binary node) {
 
-            final Object left = interpretBexpr(node.lhs);
-            final Object right = interpretBexpr(node.rhs);
+            final Object left = interpretExpression(node.lhs);
+            final Object right = interpretExpression(node.rhs);
 
             switch (node.op) {
                 case Exponent:          return Math.pow(toDouble(left), toDouble(right));
@@ -142,11 +156,11 @@ public class Interpreter {
         }
 
         @Override
-        public Object visit(Unary node) {
+        public Object visit(NodeExpression.Unary node) {
             switch (node.op) {
-                case Not:               return ! (Boolean) interpretBexpr(node.val);
-                case Invert:            return ~ (Integer) interpretBexpr(node.val);
-                case Negate:            return - toDouble(interpretBexpr(node.val));
+                case Not:               return ! (Boolean) interpretExpression(node.val);
+                case Invert:            return ~ (Integer) interpretExpression(node.val);
+                case Negate:            return - toDouble(interpretExpression(node.val));
                 case Decrement:
                 case Increment:
                 default:
@@ -155,12 +169,12 @@ public class Interpreter {
             }
         }
         @Override
-        public Object visit(Term node) {
+        public Object visit(NodeExpression.Term node) {
             return interpretTerm(node.val);
         }
     };
 
-    private Object interpretBexpr(NodeExpression node) {
+    private Object interpretExpression(NodeExpression node) {
         return node.host(nodeExpressionVisitor);
     }
 
