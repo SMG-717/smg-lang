@@ -13,3 +13,8 @@ Operator    ->  '^'                                 prec = 8
                 '=='  | '!='                        prec = 3
                 '&'   | '|'   | 'xor'               prec = 2
                 'and' | 'or'                        prec = 1
+
+
+features to add:
+- else if
+- standalone scopes

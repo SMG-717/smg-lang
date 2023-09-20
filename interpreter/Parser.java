@@ -66,6 +66,7 @@ public class Parser {
 
     private NodeStatement parseStatement() {
 
+        // Declaration
         if (tryConsume(Token.Let)) {
             final NodeVariable var = parseVariable();
             if (var == null) {
@@ -80,6 +81,7 @@ public class Parser {
             
         }
 
+        // If statement
         else if (tryConsume(Token.If)) {
             final NodeExpression expr = parseExpression();
             if (expr == null) {
@@ -94,8 +96,15 @@ public class Parser {
                 throw new RuntimeException("Unparsable Scope.");
             }
             tryConsume(Token.CloseCurly, "Expected '}'");
+
+            int ahead = 1;
+            while (peek(ahead) == Token.Newline || peek(ahead).isAny(TokenType.Comment)) {
+                ahead += 1;
+            }
             
-            if (tryConsume(Token.Else)) {
+            if (peek(ahead) == Token.Else) {
+                while (peek() != Token.Else) consume();
+                consume();
                 tryConsume(Token.OpenCurly, "Expected '{'");
                 scopeElse = parseScope();
                 if (scopeElse == null) {
@@ -169,6 +178,15 @@ public class Parser {
                 throw new RuntimeException("Expected expression");
             }
             return new NodeStatement.Return(expr);  
+        }
+
+        else if (tryConsume(Token.OpenCurly)) {
+            final NodeScope scope = parseScope();
+            if (scope == null) {
+                throw new RuntimeException("Expected scope definition");
+            }
+            tryConsume(Token.CloseCurly, "Expected '}'");
+            return new NodeStatement.Scope(scope);
         }
 
         else if (peek().isAny(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
