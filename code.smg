@@ -21,4 +21,9 @@ define fib(x) {
     return b
 }
 
-fib(-1) == 0
+fib(10)
+
+let array = [10]
+array[6] = 'Saif'
+array[7] = 20
+array[6] == 'Saif'

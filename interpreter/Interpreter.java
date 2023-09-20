@@ -190,6 +190,31 @@ public class Interpreter {
             returnFlag = true;
             return value;
         }
+        
+        public Object visit(NodeStatement.ArrayAssign array) {
+            final Object position = interpretExpression(array.position);
+            if (!(position instanceof Integer) || (Integer) position < 0) {
+                throw new RuntimeException("Array size must be a positive integer: " + position.getClass());
+            }
+            
+            final Object[] objectArray = (Object[]) getVariable(array.qualifier.name + "[]");
+            if ((Integer) position >= objectArray.length) {
+                throw new RuntimeException("Array index out of bounds: " + position);
+            }
+
+            final Object value = interpretExpression(array.expression);
+            return objectArray[(Integer) position] = value;
+        }
+
+        public Object visit(NodeStatement.Array array) {
+            final Object size = interpretExpression(array.length);
+            if (!(size instanceof Integer) || (Integer) size < 0) {
+                throw new RuntimeException("Array size must be a positive integer: " + size.getClass());
+            }
+
+            addVariable(array.qualifier.name + "[]", new Object[(Integer) size]);
+            return null;
+        }
     };
 
     public Object interpretStatement(NodeStatement statement) {
@@ -311,6 +336,21 @@ public class Interpreter {
             returnFlag = false;
             return output;
         }
+
+        public Object visit(NodeTerm.ArrayAccess array) {
+            final Object position = interpretExpression(array.position);
+            if (!(position instanceof Integer) || (Integer) position < 0) {
+                throw new RuntimeException("Array index must be a positive integer: " + position.getClass());
+            }
+            
+            final Object[] objectArray = (Object[]) getVariable(array.qualifier.name + "[]");
+            if ((Integer) position >= objectArray.length) {
+                throw new RuntimeException("Array index out of bounds: " + position);
+            }
+
+            return objectArray[(Integer) position];
+        }
+
     };
 
     private Object interpretTerm(NodeTerm term) { return term.host(termVisitor); }

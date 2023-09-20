@@ -76,9 +76,21 @@ public class Parser {
                 throw new RuntimeException("Expected '='");
             }
 
-            final NodeExpression expr = parseExpression();
-            return expr == null ? null : new NodeStatement.Declare(var, expr);
-            
+            // Arrays
+            if (tryConsume(Token.OpenSquare)) {
+                final NodeExpression expr = parseExpression();
+                if (expr == null) {
+                    throw new RuntimeException("Expected expression");
+                }
+
+                tryConsume(Token.CloseSquare, "Expected ']'");
+                return new NodeStatement.Array(var, expr);
+            }
+            else {
+                final NodeExpression expr = parseExpression();
+                return expr == null ? null : new NodeStatement.Declare(var, expr);
+            }
+
         }
 
         // If statement
@@ -118,6 +130,7 @@ public class Parser {
             return new NodeStatement.If(expr, scope, scopeElse);
         }
 
+        // While loop
         else if (tryConsume(Token.While)) {
             final NodeExpression expr = parseExpression();
             if (expr == null) {
@@ -135,6 +148,7 @@ public class Parser {
             return new NodeStatement.While(expr, scope);
         }
 
+        // Function Definition
         else if (tryConsume(Token.Define)) {
             final NodeVariable name = parseVariable();
             if (name == null) {
@@ -169,6 +183,7 @@ public class Parser {
 
         }
 
+        // Return Statement
         else if (tryConsume(Token.Return)) {
             if (peek().isAny(TokenType.Comment, TokenType.StatementTerminator, TokenType.StatementTerminator)) {
                 return new NodeStatement.Return(null);  
@@ -180,6 +195,7 @@ public class Parser {
             return new NodeStatement.Return(expr);  
         }
 
+        // Standalone scope
         else if (tryConsume(Token.OpenCurly)) {
             final NodeScope scope = parseScope();
             if (scope == null) {
@@ -189,6 +205,7 @@ public class Parser {
             return new NodeStatement.Scope(scope);
         }
 
+        // Assignment
         else if (peek().isAny(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
 
             final NodeVariable var = parseVariable();
@@ -202,6 +219,44 @@ public class Parser {
             return expr == null ? null : new NodeStatement.Assign(var, expr);
         }
 
+        // Array Assignment
+        else if (peek().isAny(TokenType.Qualifier) && peek(1) == Token.OpenSquare) {
+
+            int ahead = 2, balance = 1;
+            while (balance > 0) {
+                if (peek(ahead) == Token.OpenSquare) {
+                    balance += 1;
+                }
+                if (peek(ahead) == Token.CloseSquare) {
+                    balance -= 1;
+                }
+                ahead += 1;
+            }
+            
+            if (peek(ahead) == Token.EqualSign) {
+                final NodeVariable var = parseVariable();
+                if (var == null) {
+                    throw new RuntimeException("Expected qualifier: " + peek().value);
+                }
+                
+                tryConsume(Token.OpenSquare, "Expected '['");
+                final NodeExpression pos = parseExpression();
+                if (pos == null) {
+                    throw new RuntimeException("Expected expression: " + peek().value);
+                }
+                tryConsume(Token.CloseSquare, "Expected ']'");
+                tryConsume(Token.EqualSign, "Expected '='");
+                
+                final NodeExpression expr = parseExpression();
+                if (expr == null) {
+                    throw new RuntimeException("Expected expression: " + peek().value);
+                }
+                return expr == null ? null : new NodeStatement.ArrayAssign(var, pos, expr);
+            }
+
+        }
+
+        // Bare Expressions
         final NodeExpression expr = parseExpression();
         return expr == null ? null : new NodeStatement.Expression(expr);
     }
@@ -306,6 +361,15 @@ public class Parser {
                     }
                     atom = new NodeTerm.Call(var, args);
                 } 
+                else if (tryConsume(Token.OpenSquare)) {
+                    final NodeExpression expr = parseExpression();
+                    if (expr == null) {
+                        throw new RuntimeException("Expected expression");  
+                    } 
+
+                    tryConsume(Token.CloseSquare, "Expected ']'");
+                    atom = new NodeTerm.ArrayAccess(var, expr);
+                }
                 else {
                     atom = new NodeTerm.Variable(var);
                 }
@@ -544,6 +608,23 @@ interface NodeStatement {
             return "StmtDeclare: { " + qualifier + "=" + expression + " }";
         } 
     }
+    
+    class Array implements NodeStatement {
+    
+        public final NodeVariable qualifier;
+        public final NodeExpression length;
+    
+        Array(NodeVariable qualifier, NodeExpression length) {
+            this.qualifier = qualifier;
+            this.length = length;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtDeclare: " + qualifier + "[ " + length +  " ]";
+        } 
+    }
 
     class Assign implements NodeStatement {
     
@@ -552,6 +633,25 @@ interface NodeStatement {
     
         Assign(NodeVariable qualifier, NodeExpression expression) {
             this.qualifier = qualifier;
+            this.expression = expression;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtAssign: { " + qualifier + "=" + expression + " }";
+        } 
+    }
+
+    class ArrayAssign implements NodeStatement {
+    
+        public final NodeVariable qualifier;
+        public final NodeExpression position;
+        public final NodeExpression expression;
+    
+        ArrayAssign(NodeVariable qualifier, NodeExpression position, NodeExpression expression) {
+            this.qualifier = qualifier;
+            this.position = position;
             this.expression = expression;
         }
         
@@ -586,6 +686,8 @@ interface NodeStatement {
         Object visit(Scope expression);
         Object visit(Function expression);
         Object visit(Return expression);
+        Object visit(Array expression);
+        Object visit(ArrayAssign expression);
     }
 }
 
@@ -714,11 +816,30 @@ interface NodeTerm {
         } 
     }
 
+    class ArrayAccess implements NodeTerm {
+        public final NodeVariable qualifier;
+        public final NodeExpression position;
+        public ArrayAccess(NodeVariable qualifier, NodeExpression position) {
+            this.qualifier = qualifier;
+            this.position = position;
+        }
+        
+        @Override
+        public Object host(Visitor visitor) {
+            return visitor.visit(this);
+        }
+        
+        public String toString() {
+            return "TermArrayAccess: " + qualifier + " [ " + position + " ] ";
+        } 
+    }
+
     Object host(Visitor term);
     interface Visitor {
         Object visit(Literal<?> lit);
         Object visit(Variable var);
         Object visit(Call call);
+        Object visit(ArrayAccess call);
     }
 }
 
