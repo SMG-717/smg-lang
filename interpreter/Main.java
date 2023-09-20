@@ -100,6 +100,8 @@ public class Main {
         System.out.println("Time taken: " + NumberFormat.getInstance().format(time) + " seconds");
         System.out.println("Java Runtime: " + System.getProperty("java.version"));
 
+        System.out.println(new Interpreter(code).interpret());
+
     }
 
     private static final Object ERROR = new Object(); 

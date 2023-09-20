@@ -199,6 +199,8 @@ public class Tokeniser {
         Token.And,
         Token.Not,
         Token.Xor,
+        Token.Define,
+        Token.Return,
         Token.Or
     );
 
@@ -297,6 +299,8 @@ class Token {
     public static final Token Else = new Token("else", TokenType.Keyword);
     public static final Token While = new Token("while", TokenType.Keyword);
     public static final Token Let = new Token("let", TokenType.Keyword);
+    public static final Token Define = new Token("define", TokenType.Keyword);
+    public static final Token Return = new Token("return", TokenType.Keyword);
     public static final Token True = new Token("true", TokenType.BooleanLiteral);
     public static final Token False = new Token("false", TokenType.BooleanLiteral);
     

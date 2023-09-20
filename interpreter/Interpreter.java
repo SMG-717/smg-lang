@@ -24,6 +24,7 @@ public class Interpreter {
     private final LinkedList<Map<String, Object>> scopes;
     private final Parser parser;
     private Object lastResult;
+    private boolean returnFlag = false;
 
     public Interpreter(String input) {
         this(input, new HashMap<>());
@@ -118,6 +119,9 @@ public class Interpreter {
         Object output = null;
         for (NodeStatement statement : scope.statements) {
             output = interpretStatement(statement);
+            if (returnFlag) {
+                break;
+            }
         }
         exitScope();
 
@@ -171,6 +175,20 @@ public class Interpreter {
         
         public Object visit(NodeStatement.Scope scope) {
             return interpretScope(scope.scope);
+        }
+
+        public Object visit(NodeStatement.Function function) {
+            if (defined(function.name.name + "()")) {
+                throw new RuntimeException("Function already defined");                
+            }
+            addVariable(function.name.name + "()", function);
+            return null;
+        }
+
+        public Object visit(NodeStatement.Return stmt) {
+            final Object value = interpretExpression(stmt.expr);
+            returnFlag = true;
+            return value;
         }
     };
 
@@ -264,6 +282,34 @@ public class Interpreter {
 
         public Object visit(NodeTerm.Variable variable) {
             return getVariable(variable.var.name);
+        }
+
+        public Object visit(NodeTerm.Call call) {
+            final NodeStatement.Function function = (NodeStatement.Function) getVariable(call.function.name + "()");
+
+            if (call.arguments.size() != function.params.size()) {
+                throw new RuntimeException("Function '" + function.name + "()' was called with an incorrect number of arguments");
+            }
+
+            enterScope();
+            for (int i = 0; i < call.arguments.size(); i += 1) {
+
+                scopes.getLast().put(function.params.get(i).name, interpretExpression(call.arguments.get(i)));
+                // addVariable(function.params.get(i).name, interpretExpression(call.arguments.get(i)));
+            }
+
+            Object output = null;
+            for (NodeStatement statement : function.body.statements) {
+                output = interpretStatement(statement);
+                
+                if (returnFlag) {
+                    break;
+                }
+            }
+            exitScope();
+
+            returnFlag = false;
+            return output;
         }
     };
 

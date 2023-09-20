@@ -134,6 +134,52 @@ public class Parser {
             return new NodeStatement.While(expr, scope);
         }
 
+        else if (tryConsume(Token.Define)) {
+            final NodeVariable name = parseVariable();
+            if (name == null) {
+                throw new RuntimeException("Expected function name: " + peek().value);
+            }
+
+            tryConsume(Token.OpenParen, "Expected '('");
+            final List<NodeVariable> params = new LinkedList<>();
+            while (true) { 
+                final NodeVariable param = parseVariable();
+                if (param == null) {
+                    throw new RuntimeException("Expected function parameter: " + peek().value);
+                } 
+                
+                params.add(param);
+
+                if (tryConsume(Token.CloseParen)) {
+                    break;
+                }
+                
+                tryConsume(Token.Comma, "Expected ','");
+            }
+
+            tryConsume(Token.OpenCurly, "Expected '{'");
+            final NodeScope scope = parseScope();
+            if (scope == null) {
+                throw new RuntimeException("Unparsable Scope.");
+            }
+            tryConsume(Token.CloseCurly, "Expected '}'");
+
+            return new NodeStatement.Function(name, params, scope);
+
+        }
+
+        else if (tryConsume(Token.Return)) {
+            if (peek() == Token.Newline || peek() == Token.SemiColon || peek() == Token.CloseCurly 
+                 || peek() == Token.EOT || peek().is(TokenType.Comment)) {
+                return new NodeStatement.Return(null);  
+            }
+            final NodeExpression expr = parseExpression();
+            if (expr == null) {
+                throw new RuntimeException("Expected expression");
+            }
+            return new NodeStatement.Return(expr);  
+        }
+
         else if (peek().is(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
 
             final NodeVariable var = parseVariable();
@@ -228,8 +274,37 @@ public class Parser {
             }
             return arthmeticNode(op, expr);
         }
-        else {
-            final NodeTerm atom = parseTerm();
+        else {            
+            final NodeTerm atom;
+
+            if (peek().is(TokenType.Qualifier)) {
+                final NodeVariable var = parseVariable();
+
+                if (tryConsume(Token.OpenParen)) {
+                    final List<NodeExpression> args = new LinkedList<>();
+                    while (true) {
+                        final NodeExpression expr = parseExpression();
+                        if (expr == null) {
+                            throw new RuntimeException("Expected expression");
+                        }
+
+                        args.add(expr);
+                        if (tryConsume(Token.CloseParen)) {
+                            break;
+                        }
+
+                        tryConsume(Token.Comma, "Expected ',' between arguments");
+                    }
+                    atom = new NodeTerm.Call(var, args);
+                } 
+                else {
+                    atom = new NodeTerm.Variable(var);
+                }
+            } 
+            else {
+                atom = parseLiteral();
+            }
+
             if (atom == null) {
                 return null;
             }
@@ -239,12 +314,6 @@ public class Parser {
         }
     }
 
-    private NodeTerm parseTerm() {
-        if (peek().is(TokenType.Qualifier)) {
-            return new NodeTerm.Variable(parseVariable());
-        } 
-        return parseLiteral();
-    }
 
     /*
      * Parse Variable
@@ -358,6 +427,40 @@ class NodeScope {
 }
 
 interface NodeStatement {
+    class Return implements NodeStatement {
+    
+        public final NodeExpression expr;
+    
+        Return(NodeExpression expr) {
+            this.expr = expr;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtReturn: return { " + expr + "  }";
+        } 
+    }
+
+    class Function implements NodeStatement {
+    
+        public final NodeVariable name;
+        public final List<NodeVariable> params; 
+        public final NodeScope body; 
+    
+        Function(NodeVariable name, List<NodeVariable> params, NodeScope body) {
+            this.name = name;
+            this.params = List.copyOf(params);
+            this.body = body;
+        }
+        
+        public Object host(Visitor visitor) { return visitor.visit(this); }
+
+        public String toString() {
+            return "StmtFunction: def " + name.name + " ( " + params + " ) { " + body + " }";
+        } 
+    }
+
     class If implements NodeStatement {
     
         public final NodeExpression expression;
@@ -465,6 +568,8 @@ interface NodeStatement {
         Object visit(If expression);
         Object visit(While expression);
         Object visit(Scope expression);
+        Object visit(Function expression);
+        Object visit(Return expression);
     }
 }
 
@@ -550,7 +655,6 @@ interface NodeTerm {
             this.lit = lit;
         }
         
-        @Override
         public Object host(Visitor visitor) {
             return visitor.visit(this);
         }
@@ -576,10 +680,29 @@ interface NodeTerm {
         } 
     }
 
+    class Call implements NodeTerm {
+        public final NodeVariable function;
+        public final List<NodeExpression> arguments;
+        public Call(NodeVariable function, List<NodeExpression> arguments) {
+            this.function = function;
+            this.arguments = List.copyOf(arguments);
+        }
+        
+        @Override
+        public Object host(Visitor visitor) {
+            return visitor.visit(this);
+        }
+        
+        public String toString() {
+            return "TermCall: " + function.name + " ( " + arguments + " ) ";
+        } 
+    }
+
     Object host(Visitor term);
     interface Visitor {
         Object visit(Literal<?> lit);
         Object visit(Variable var);
+        Object visit(Call call);
     }
 }
 
@@ -593,15 +716,3 @@ class NodeVariable {
         return "Var: " + this.name;
     }
 }
-
-// class NodeLiteral<R> {
-//     public final R val;
-
-//     NodeLiteral(R val) {
-//         this.val = val;
-//     }
-
-//     public String toString() {
-//         return "Lit: " + this.val;
-//     }
-// }
