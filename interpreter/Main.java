@@ -6,9 +6,7 @@ import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
@@ -53,14 +51,6 @@ public class Main {
             List.of("empty or true", ERROR),
             List.of("true or empty", true),
 
-            // Varibles
-            List.of("x > 5", true),
-            List.of("y <= 8", true),
-            List.of("SMG == 'Best'", true),
-            List.of("Others != 'Best'", true),
-            List.of("Everyone == 'Best'", ERROR),
-            List.of("Today < 01/01/2030", true),
-
             // Operator Precedence
             List.of("(1 + 2 + 3) * 100 * 4 / (30 + 5 ^ 2 - 5) == 24 * 2", true),
             List.of("120 / 5 / 4 / 3 / 2 == 1", true),
@@ -73,24 +63,8 @@ public class Main {
             List.of("((((true))))", true),
             List.of("((((true))) or true)", true),
 
-            // Simple atomic expressions must evaluate to boolean
-            List.of("0", 0.0D),
-            List.of("SMG", "Best"),
-            List.of("1 + 2", 3.0D),
-            List.of("Active", true),
-
             // Code from file
             List.of(code, true)
-        );
-
-        final Map<String, Object> vars = Map.of(
-            "x", 10, 
-            "y", 7, 
-            "SMG", "Best", 
-            "Others", "Not Best", 
-            "Active", true,
-            "Today", Date.from(Instant.now()),
-            "Sqrt2", Math.sqrt(2)
         );
 
         int index = 0, count = 0;
@@ -98,10 +72,9 @@ public class Main {
         for (List<Object> test : expressions) {
             final String expression = (String) test.get(0);
             boolean success = false; 
-            Interpreter intr = null;
+            final Interpreter intr = new Interpreter(expression);
             
             try {
-                intr = new Interpreter(expression, vars);
                 success = intr.interpret().equals(test.get(1)) && test.get(1) != ERROR;
             } catch (Exception e) {
                 success = test.get(1) == ERROR;
