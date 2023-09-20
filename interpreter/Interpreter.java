@@ -213,18 +213,18 @@ public class Interpreter {
             final Object right = interpretExpression(node.rhs);
 
             switch (node.op) {
-                case Exponent:          return Math.pow(toDouble(left), toDouble(right));
-                case Multiply:          return toDouble(left) * toDouble(right);
-                case Divide:            return toDouble(left) / toDouble(right);
-                case Modulo:            return toDouble(left) % toDouble(right);
-                case Add:               return toDouble(left) + toDouble(right);
-                case Subtract:          return toDouble(left) - toDouble(right);
-                case Greater:           return toDouble(left) > toDouble(right);
-                case GreaterEqual:      return toDouble(left) >= toDouble(right);
-                case Less:              return toDouble(left) < toDouble(right);
-                case LessEqual:         return toDouble(left) <= toDouble(right);
-                case NotEqual:          return toDouble(left) != toDouble(right);
-                case Equal:             return toDouble(left) == toDouble(right);
+                case Exponent:          return Math.pow(evaluate(left), evaluate(right));
+                case Multiply:          return evaluate(left) * evaluate(right);
+                case Divide:            return evaluate(left) / evaluate(right);
+                case Modulo:            return evaluate(left) % evaluate(right);
+                case Add:               return evaluate(left) + evaluate(right);
+                case Subtract:          return evaluate(left) - evaluate(right);
+                case Greater:           return evaluate(left) > evaluate(right);
+                case GreaterEqual:      return evaluate(left) >= evaluate(right);
+                case Less:              return evaluate(left) < evaluate(right);
+                case LessEqual:         return evaluate(left) <= evaluate(right);
+                case NotEqual:          return evaluate(left) != evaluate(right);
+                case Equal:             return evaluate(left) == evaluate(right);
                 case BitAnd:            return (Integer) left & (Integer) right;
                 case BitOr:             return (Integer) left | (Integer) right;
                 case BitXor:            return (Integer) left ^ (Integer) right;
@@ -242,7 +242,7 @@ public class Interpreter {
             switch (node.op) {
                 case Not:               return ! (Boolean) interpretExpression(node.val);
                 case Invert:            return ~ (Integer) interpretExpression(node.val);
-                case Negate:            return - toDouble(interpretExpression(node.val));
+                case Negate:            return - evaluate(interpretExpression(node.val));
                 case Decrement:
                 case Increment:
                 default:
@@ -324,13 +324,14 @@ public class Interpreter {
      * same. All strings that are equal must have the same hash but not all strings with the same has must be equivalent.
      * Read the Java Documentation on Strings for more info.
      */
-    private double toDouble(Object value) {
+    private long evaluate(Object value) {
         if (value == null) return 0;
         else if (value instanceof Date) return ((Date) value).getTime();
-        else if (value instanceof Double) return (double) value;
-        else if (value instanceof Integer) return (double) (int) value;
-        else if (value instanceof String) return (double) ((String) value).hashCode();
+        else if (value instanceof Double) return (long) (double) value;
+        else if (value instanceof Integer) return (Integer) value;
+        else if (value instanceof String) return ((String) value).hashCode();
+        else if (value instanceof Long) return (Long) value;
         
-        throw new RuntimeException("Atomic expression required to be double, or double similar, but is not: " + value);
+        throw new RuntimeException("Atomic expression required to be integer, or integer similar, but is not: " + value);
     }
 }

@@ -189,19 +189,8 @@ public class Tokeniser {
     }
 
     private static final List<Token> keywords = List.of(
-        Token.Empty,
-        Token.If,
-        Token.Else,
-        Token.While,
-        Token.Let,
-        Token.True,
-        Token.False,
-        Token.And,
-        Token.Not,
-        Token.Xor,
-        Token.Define,
-        Token.Return,
-        Token.Or
+        Token.Empty, Token.If, Token.Else, Token.While, Token.Let, Token.True, Token.False,
+        Token.And, Token.Not, Token.Xor, Token.Define, Token.Return, Token.Or
     );
 
     private Token getKeyword(String value) {
@@ -276,7 +265,8 @@ public class Tokeniser {
 enum TokenType{
     Qualifier, Keyword, Punctuation, WhiteSpace, Comment,
     NumberLiteral, StringLiteral, BooleanLiteral, DateLiteral, 
-    BinaryArithmetic, UnaryArithmetic;
+    BinaryArithmetic, UnaryArithmetic,
+    StatementTerminator, ScopeTerminator;
 }
 
 /*
@@ -289,70 +279,71 @@ enum TokenType{
  */
 class Token {
 
-    public final String value;
-    public final Set<TokenType> types;
-    public final int precedence;
-    public final boolean rightassoc;
+    final String value;
+    final Set<TokenType> types;
+    final int precedence;
+    final boolean rightassoc;
 
-    public static final Token Empty = new Token("empty", TokenType.Keyword);
-    public static final Token If = new Token("if", TokenType.Keyword);
-    public static final Token Else = new Token("else", TokenType.Keyword);
-    public static final Token While = new Token("while", TokenType.Keyword);
-    public static final Token Let = new Token("let", TokenType.Keyword);
-    public static final Token Define = new Token("define", TokenType.Keyword);
-    public static final Token Return = new Token("return", TokenType.Keyword);
-    public static final Token True = new Token("true", TokenType.BooleanLiteral);
-    public static final Token False = new Token("false", TokenType.BooleanLiteral);
+    static final Token Empty = new Token("empty", TokenType.Keyword);
+    static final Token If = new Token("if", TokenType.Keyword);
+    static final Token Else = new Token("else", TokenType.Keyword);
+    static final Token While = new Token("while", TokenType.Keyword);
+    static final Token Let = new Token("let", TokenType.Keyword);
+    static final Token Define = new Token("define", TokenType.Keyword);
+    static final Token Return = new Token("return", TokenType.Keyword);
+    static final Token True = new Token("true", TokenType.BooleanLiteral);
+    static final Token False = new Token("false", TokenType.BooleanLiteral);
     
-    public static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8, true);
-    public static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);
-    public static final Token ForwardSlash = new Token("/", TokenType.BinaryArithmetic, 7);
-    public static final Token Percent = new Token("%", TokenType.BinaryArithmetic, 7);
-    public static final Token Plus = new Token("+", TokenType.BinaryArithmetic, 6);
-    public static final Token Hyphen = new Token("-", Set.of(TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6);
-    public static final Token ShiftLeft = new Token("<<", TokenType.BinaryArithmetic, 5);
-    public static final Token ShiftRight = new Token(">>", TokenType.BinaryArithmetic, 5);
-    public static final Token Greater = new Token(">", TokenType.BinaryArithmetic, 4);
-    public static final Token Less = new Token("<", TokenType.BinaryArithmetic, 4);
-    public static final Token GreaterEqual = new Token(">=", TokenType.BinaryArithmetic, 4);
-    public static final Token LessEqual = new Token("<=", TokenType.BinaryArithmetic, 4);
-    public static final Token Equals = new Token("==", TokenType.BinaryArithmetic, 3);
-    public static final Token NotEquals = new Token("!=", TokenType.BinaryArithmetic, 3);
-    public static final Token Ampersand = new Token("&", TokenType.BinaryArithmetic, 2);
-    public static final Token Pipe = new Token("|", TokenType.BinaryArithmetic, 2);
-    public static final Token Xor = new Token("xor", TokenType.BinaryArithmetic, 2);
-    public static final Token And = new Token("and", TokenType.BinaryArithmetic, 1);
-    public static final Token Or = new Token("or", TokenType.BinaryArithmetic, 1);
-    public static final Token Not = new Token("not", TokenType.UnaryArithmetic);
-    public static final Token Tilde = new Token("~", TokenType.UnaryArithmetic);
+    static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8, true);
+    static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);
+    static final Token ForwardSlash = new Token("/", TokenType.BinaryArithmetic, 7);
+    static final Token Percent = new Token("%", TokenType.BinaryArithmetic, 7);
+    static final Token Plus = new Token("+", TokenType.BinaryArithmetic, 6);
+    static final Token ShiftLeft = new Token("<<", TokenType.BinaryArithmetic, 5);
+    static final Token ShiftRight = new Token(">>", TokenType.BinaryArithmetic, 5);
+    static final Token Greater = new Token(">", TokenType.BinaryArithmetic, 4);
+    static final Token Less = new Token("<", TokenType.BinaryArithmetic, 4);
+    static final Token GreaterEqual = new Token(">=", TokenType.BinaryArithmetic, 4);
+    static final Token LessEqual = new Token("<=", TokenType.BinaryArithmetic, 4);
+    static final Token Equals = new Token("==", TokenType.BinaryArithmetic, 3);
+    static final Token NotEquals = new Token("!=", TokenType.BinaryArithmetic, 3);
+    static final Token Ampersand = new Token("&", TokenType.BinaryArithmetic, 2);
+    static final Token Pipe = new Token("|", TokenType.BinaryArithmetic, 2);
+    static final Token Xor = new Token("xor", TokenType.BinaryArithmetic, 2);
+    static final Token And = new Token("and", TokenType.BinaryArithmetic, 1);
+    static final Token Or = new Token("or", TokenType.BinaryArithmetic, 1);
+    static final Token Not = new Token("not", TokenType.UnaryArithmetic);
+    static final Token Tilde = new Token("~", TokenType.UnaryArithmetic);
 
-    public static final Token At = new Token("@", TokenType.Punctuation);
-    public static final Token Underscore = new Token("_", TokenType.Punctuation);
-    public static final Token Hashtag = new Token("#", TokenType.Punctuation);
-    public static final Token Exclaim = new Token("!", Set.of(TokenType.Punctuation, TokenType.UnaryArithmetic), 0);
-    public static final Token Question = new Token("?", TokenType.Punctuation);
-    public static final Token Comma = new Token(",", TokenType.Punctuation);
-    public static final Token Colon = new Token(":", TokenType.Punctuation);
-    public static final Token Period = new Token(".", TokenType.Punctuation);
-    public static final Token SemiColon = new Token(";", TokenType.Punctuation);
-    public static final Token BackSlash = new Token("\\", TokenType.Punctuation);
-    public static final Token OpenParen = new Token("(", TokenType.Punctuation);
-    public static final Token CloseParen = new Token(")", TokenType.Punctuation);
-    public static final Token OpenCurly = new Token("{", TokenType.Punctuation);
-    public static final Token CloseCurly = new Token("}", TokenType.Punctuation);
-    public static final Token OpenSquare = new Token("[", TokenType.Punctuation);
-    public static final Token CloseSquare = new Token("]", TokenType.Punctuation);
-    public static final Token DoubleQuote = new Token("\"", TokenType.Punctuation);
-    public static final Token SingleQuote = new Token("\'", TokenType.Punctuation);
-    public static final Token EqualSign = new Token("=", TokenType.Punctuation);
+    static final Token At = new Token("@", TokenType.Punctuation);
+    static final Token Underscore = new Token("_", TokenType.Punctuation);
+    static final Token Hashtag = new Token("#", TokenType.Punctuation);
+    static final Token Question = new Token("?", TokenType.Punctuation);
+    static final Token Comma = new Token(",", TokenType.Punctuation);
+    static final Token Colon = new Token(":", TokenType.Punctuation);
+    static final Token Period = new Token(".", TokenType.Punctuation);
+    static final Token BackSlash = new Token("\\", TokenType.Punctuation);
+    static final Token OpenParen = new Token("(", TokenType.Punctuation);
+    static final Token CloseParen = new Token(")", TokenType.Punctuation);
+    static final Token OpenCurly = new Token("{", TokenType.Punctuation);
+    static final Token OpenSquare = new Token("[", TokenType.Punctuation);
+    static final Token CloseSquare = new Token("]", TokenType.Punctuation);
+    static final Token DoubleQuote = new Token("\"", TokenType.Punctuation);
+    static final Token SingleQuote = new Token("\'", TokenType.Punctuation);
+    static final Token EqualSign = new Token("=", TokenType.Punctuation);
+    
+    static final Token CarriageReturn = new Token("\r", TokenType.WhiteSpace);
+    static final Token Tab = new Token("\t", TokenType.WhiteSpace);
+    static final Token BackSpace = new Token("\b", TokenType.WhiteSpace);
+    
+    static final Token Hyphen = new Token("-", Set.of(TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6);
+    static final Token Exclaim = new Token("!", Set.of(TokenType.Punctuation, TokenType.UnaryArithmetic), 0);
+    static final Token SemiColon = new Token(";", Set.of(TokenType.Punctuation, TokenType.StatementTerminator), 0);
+    static final Token CloseCurly = new Token("}", Set.of(TokenType.Punctuation, TokenType.ScopeTerminator), 0);
+    static final Token Newline = new Token("\n", Set.of(TokenType.WhiteSpace, TokenType.StatementTerminator), 0);
+    static final Token EOT = new Token("End", Set.of(TokenType.StatementTerminator, TokenType.ScopeTerminator), 0);
 
-    public static final Token Newline = new Token("\n", TokenType.WhiteSpace);
-    public static final Token CarriageReturn = new Token("\r", TokenType.WhiteSpace);
-    public static final Token Tab = new Token("\t", TokenType.WhiteSpace);
-    public static final Token BackSpace = new Token("\b", TokenType.WhiteSpace);
-
-    public static final Token EOT = Token.makeToken("End", TokenType.Keyword);
-    public static final char EOF = '\0';
+    static final char EOF = '\0';
 
     private Token(String val, TokenType type) {
         this(val, type, 0);
@@ -385,8 +376,22 @@ class Token {
         return new Token(name, type);
     }
 
-    boolean is(TokenType type) {
-        return types.contains(type);
+    boolean isAny(TokenType... types) {
+        for (TokenType type : types) {
+            if (this.types.contains(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean isAll(TokenType... types) {
+        for (TokenType type : types) {
+            if (!this.types.contains(type)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

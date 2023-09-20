@@ -42,31 +42,23 @@ public class Parser {
         List<NodeStatement> statements = new ArrayList<>();
         while (peek() != Token.EOT) {
             
-            while (peek() == Token.Newline || 
-                    peek() == Token.SemiColon || 
-                    peek().is(TokenType.Comment)) 
+            if (peek().isAny(TokenType.StatementTerminator, TokenType.Comment)) {
                 consume();
+                continue;
+            }
             
-            if (peek() == Token.CloseCurly)
+            if (peek().isAny(TokenType.ScopeTerminator))
                 break;
 
             NodeStatement statement = parseStatement();
             if (statement == null) {
                 throw new RuntimeException("Incomplete/Unparsable statement");
             }
-            else if (peek() != Token.Newline && 
-                    peek() != Token.SemiColon && 
-                    peek() != Token.EOT && 
-                    peek() != Token.CloseCurly && 
-                    !peek().is(TokenType.Comment)) {
+            else if (!peek().isAny(TokenType.StatementTerminator, TokenType.StatementTerminator, TokenType.Comment)) {
                 throw new RuntimeException("Statement must end in a termination character ('\\n', or ';' or EOT)");
             }
-
             
             statements.add(statement);
-
-            // if (peek() == Token.CloseCurly)
-            //     break;
         }
 
         return new NodeScope(statements);
@@ -169,8 +161,7 @@ public class Parser {
         }
 
         else if (tryConsume(Token.Return)) {
-            if (peek() == Token.Newline || peek() == Token.SemiColon || peek() == Token.CloseCurly 
-                 || peek() == Token.EOT || peek().is(TokenType.Comment)) {
+            if (peek().isAny(TokenType.Comment, TokenType.StatementTerminator, TokenType.StatementTerminator)) {
                 return new NodeStatement.Return(null);  
             }
             final NodeExpression expr = parseExpression();
@@ -180,7 +171,7 @@ public class Parser {
             return new NodeStatement.Return(expr);  
         }
 
-        else if (peek().is(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
+        else if (peek().isAny(TokenType.Qualifier) && peek(1) == Token.EqualSign) {
 
             final NodeVariable var = parseVariable();
             if (var == null) {
@@ -202,11 +193,11 @@ public class Parser {
     }
     private NodeExpression parseExpression(NodeExpression left, int prec) {
 
-        while (peek().is(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
+        while (peek().isAny(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
             final Token op = consume();
             NodeExpression right = parseAtom();
 
-            while (peek().is(TokenType.BinaryArithmetic) && (
+            while (peek().isAny(TokenType.BinaryArithmetic) && (
                 (peek().precedence > op.precedence) || 
                 (peek().precedence >= op.precedence && peek().rightassoc))) {
                 right = parseExpression(right, op.precedence + (peek().precedence > op.precedence ? 1 : 0));
@@ -266,7 +257,7 @@ public class Parser {
                 throw new RuntimeException("Unparsable/Invalid expression");
             }
             return exp;
-        } else if (peek().is(TokenType.UnaryArithmetic)) {
+        } else if (peek().isAny(TokenType.UnaryArithmetic)) {
             final Token op = consume();
             final NodeExpression expr = parseAtom();
             if (expr == null) {
@@ -277,7 +268,7 @@ public class Parser {
         else {            
             final NodeTerm atom;
 
-            if (peek().is(TokenType.Qualifier)) {
+            if (peek().isAny(TokenType.Qualifier)) {
                 final NodeVariable var = parseVariable();
 
                 if (tryConsume(Token.OpenParen)) {
@@ -327,7 +318,7 @@ public class Parser {
      * Variable -> [Qualifier] | [Qualifier].[Qualifier] 
      */
     private NodeVariable parseVariable() {
-        if (!peek().is(TokenType.Qualifier)) {
+        if (!peek().isAny(TokenType.Qualifier)) {
             return null;   
         }
 
@@ -349,13 +340,20 @@ public class Parser {
             return new NodeTerm.Literal<Void>(null);
         }
 
-        if (peek().is(TokenType.BooleanLiteral)) 
+        if (peek().isAny(TokenType.BooleanLiteral)) 
             return new NodeTerm.Literal<Boolean>(consume().equals(Token.True));
-        else if (peek().is(TokenType.StringLiteral))
+        else if (peek().isAny(TokenType.StringLiteral))
             return new NodeTerm.Literal<String>(consume().value);
-        else if (peek().is(TokenType.NumberLiteral))
-            return new NodeTerm.Literal<Double>(Double.parseDouble(consume().value));
-        else if (peek().is(TokenType.DateLiteral)) {
+        else if (peek().isAny(TokenType.NumberLiteral)) {
+            final String repr = consume().value;
+            try {
+                return new NodeTerm.Literal<Integer>(Integer.parseInt(repr));
+            }
+            catch (NumberFormatException e) {
+                return new NodeTerm.Literal<Double>(Double.parseDouble(repr));
+            }
+        }
+        else if (peek().isAny(TokenType.DateLiteral)) {
             final String dateToken = consume().value;
             try {
                 return new NodeTerm.Literal<Date>(format.parse(dateToken));
