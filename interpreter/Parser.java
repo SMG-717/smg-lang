@@ -195,6 +195,7 @@ public class Parser {
         if (op == Token.Hyphen) return new NodeExpression.Unary(UnaryOperator.Negate, val);
         else if (op == Token.Tilde) return new NodeExpression.Unary(UnaryOperator.Invert, val);
         else if (op == Token.Not) return new NodeExpression.Unary(UnaryOperator.Not, val);
+        else if (op == Token.Exclaim) return new NodeExpression.Unary(UnaryOperator.Not, val);
         else {
             throw new RuntimeException("Unsupported unary arithmetic operation: " + peek().value);
         }
@@ -239,16 +240,10 @@ public class Parser {
     }
 
     private NodeTerm parseTerm() {
-        final NodeLiteral<?> lit;
-        final NodeVariable var;
-        if ((var = parseVariable()) != null) {
-            return new NodeTerm.Variable(var);
+        if (peek().is(TokenType.Qualifier)) {
+            return new NodeTerm.Variable(parseVariable());
         } 
-        else if ((lit = parseLiteral()) != null) {
-            return new NodeTerm.Literal(lit);
-        } else {
-            return null;
-        }
+        return parseLiteral();
     }
 
     /*
@@ -279,22 +274,22 @@ public class Parser {
      * or 0. 
      */
     private static final SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy"); 
-    private NodeLiteral<?> parseLiteral() {
+    private NodeTerm.Literal<?> parseLiteral() {
 
         if (tryConsume(Token.Empty)) {
-            return new NodeLiteral<Void>(null);
+            return new NodeTerm.Literal<Void>(null);
         }
 
         if (peek().is(TokenType.BooleanLiteral)) 
-            return new NodeLiteral<Boolean>(consume().equals(Token.True));
+            return new NodeTerm.Literal<Boolean>(consume().equals(Token.True));
         else if (peek().is(TokenType.StringLiteral))
-            return new NodeLiteral<String>(consume().value);
+            return new NodeTerm.Literal<String>(consume().value);
         else if (peek().is(TokenType.NumberLiteral))
-            return new NodeLiteral<Double>(Double.parseDouble(consume().value));
+            return new NodeTerm.Literal<Double>(Double.parseDouble(consume().value));
         else if (peek().is(TokenType.DateLiteral)) {
             final String dateToken = consume().value;
             try {
-                return new NodeLiteral<Date>(format.parse(dateToken));
+                return new NodeTerm.Literal<Date>(format.parse(dateToken));
             } catch (ParseException e) {
                 throw new RuntimeException("Date format error: " + dateToken);
             }
@@ -549,9 +544,9 @@ interface NodeExpression {
 }
 
 interface NodeTerm {
-    class Literal implements NodeTerm {
-        public final NodeLiteral<?> lit;
-        public Literal(NodeLiteral<?> lit) {
+    class Literal<R> implements NodeTerm {
+        public final R lit;
+        public Literal(R lit) {
             this.lit = lit;
         }
         
@@ -583,7 +578,7 @@ interface NodeTerm {
 
     Object host(Visitor term);
     interface Visitor {
-        Object visit(Literal lit);
+        Object visit(Literal<?> lit);
         Object visit(Variable var);
     }
 }
@@ -599,14 +594,14 @@ class NodeVariable {
     }
 }
 
-class NodeLiteral<R> {
-    public final R val;
+// class NodeLiteral<R> {
+//     public final R val;
 
-    NodeLiteral(R val) {
-        this.val = val;
-    }
+//     NodeLiteral(R val) {
+//         this.val = val;
+//     }
 
-    public String toString() {
-        return "Lit: " + this.val;
-    }
-}
+//     public String toString() {
+//         return "Lit: " + this.val;
+//     }
+// }

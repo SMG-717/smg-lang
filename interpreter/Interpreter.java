@@ -79,6 +79,10 @@ public class Interpreter {
         return null;
     }
 
+    public Object getLastResult() {
+        return lastResult;
+    }
+
     private void enterScope() {
         scopes.add(new HashMap<>());
     }
@@ -105,18 +109,19 @@ public class Interpreter {
     public Object interpret() {
         if (parser.getRoot() == null)
             parser.parse();
-        return interpretScope(parser.getRoot());
+        return lastResult = interpretScope(parser.getRoot());
     }
 
     public Object interpretScope(NodeScope scope) {
 
         enterScope();
+        Object output = null;
         for (NodeStatement statement : scope.statements) {
-            lastResult = interpretStatement(statement);
+            output = interpretStatement(statement);
         }
         exitScope();
 
-        return lastResult;
+        return output;
     }
 
     private final NodeStatement.Visitor statementVisitor = new NodeStatement.Visitor() {
@@ -253,8 +258,8 @@ public class Interpreter {
      */
 
     final NodeTerm.Visitor termVisitor = new NodeTerm.Visitor() {
-        public Object visit(NodeTerm.Literal literal) {
-            return literal.lit.val;
+        public Object visit(NodeTerm.Literal<?> literal) {
+            return literal.lit;
         }
 
         public Object visit(NodeTerm.Variable variable) {

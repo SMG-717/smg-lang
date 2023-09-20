@@ -3,6 +3,8 @@ package interpreter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.NumberFormat;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
@@ -11,19 +13,25 @@ import java.util.Map;
 public class Main {
     public static void main(String[] args) {
 
-        final String file = "code.smg";
+        final Instant start = Instant.now();
 
-        String code = null;
-        try {
-            code = String.join("\n", Files.readAllLines(Paths.get(file)));
-        } catch (IOException e) {}
+        final String file = "code.smg";        
+        final String code = new Object() { String getCode() {
+            try {
+                return Files.readString(Paths.get(file));
+            } catch (IOException e) {
+                System.out.println("Warning: could not open file '" + file + "'");
+                return null;
+            }
+        }}.getCode();
 
         final List<List<Object>> expressions = List.of(
 
             // Test cases
             List.of("true", true),
             List.of("false", false),
-            List.of("not(true)", false),
+            List.of("not true", false),
+            List.of("!true", false),
             List.of("not(false)", true),
             List.of("true and true", true),
             List.of("true and false", false),
@@ -107,7 +115,6 @@ public class Main {
             );
             if (!success) 
                 fails.append(testResult);
-            // System.out.println("Tree -> " + (intr.getTree() != null ? intr.getTree() : "None"));
         }
         final String marks = String.format("%d/%d", count, expressions.size());
         System.out.println("Total tests passed: " + (count == expressions.size() ? green(marks) : red(marks)));
@@ -115,6 +122,10 @@ public class Main {
             System.out.println("Failed cases: ");
             System.out.print(fails.toString());
         }
+
+        final double time = Duration.between(start, Instant.now()).toMillis() / 1000.0D;
+        System.out.println("Time taken: " + NumberFormat.getInstance().format(time) + " seconds");
+        System.out.println("Java Runtime: " + System.getProperty("java.version"));
 
     }
 

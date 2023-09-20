@@ -36,60 +36,61 @@ public class Tokeniser {
     public Token nextToken() {
         final StringBuffer buffer = new StringBuffer();
         String state = "Waiting";
-        while (peekChar() != Token.EOF || buffer.length() > 0) {
+        while (peek() != Token.EOF || buffer.length() > 0) {
 
             // Building a String Literal
             if (state.startsWith("String Literal")) {
-                if (state.endsWith("Double") && tryConsumeChar(Token.DoubleQuote)) {
+                if (state.endsWith("Double") && tryConsume(Token.DoubleQuote)) {
                     final String bufferValue = buffer.toString();
                     buffer.setLength(0);
                     return Token.makeToken(bufferValue, TokenType.StringLiteral);
                 }
-                else if (state.endsWith("Single") && tryConsumeChar(Token.SingleQuote)) {
+                else if (state.endsWith("Single") && tryConsume(Token.SingleQuote)) {
                     final String bufferValue = buffer.toString();
                     buffer.setLength(0);
                     return Token.makeToken(bufferValue, TokenType.StringLiteral);
                 }
                 else {
-                    buffer.append(consumeChar());
+                    buffer.append(consume());
                 }
             }
 
+            // Building a comment
             else if (state == "Comment") {
-                if (tryConsumeChar(Token.Newline)) {
+                if (tryConsume(Token.Newline)) {
                     return Token.makeToken(buffer.toString(), TokenType.Comment);
                 }
                 else {
-                    buffer.append(consumeChar());
+                    buffer.append(consume());
                 }
             }
 
             // Building a Qualifier or Keyword
-            else if (peekChar() == '_' || alpha(peekChar()) || (alphanum(peekChar()) && state == "Word")) {
-                buffer.append(consumeChar());     
+            else if (peek() == '_' || alpha(peek()) || (alphanum(peek()) && state == "Word")) {
+                buffer.append(consume());     
                 state = "Word";
             }
             
             // Building Date or Number Literal
-            else if (numeric(peekChar()) && (state == "Decimal" || state == "Date")) {
-                buffer.append(consumeChar());
+            else if (numeric(peek()) && (state == "Decimal" || state == "Date")) {
+                buffer.append(consume());
             }
 
             // Building a Number Literal
-            else if (numeric(peekChar()) && (state == "Waiting" || state == "Number")) {
-                buffer.append(consumeChar());
+            else if (numeric(peek()) && (state == "Waiting" || state == "Number")) {
+                buffer.append(consume());
                 state = "Number";
             } 
             
             // Building a Date Literal
-            else if (peekChar() == '/' && (state == "Number" ||  state == "Date")) {
-                buffer.append(consumeChar());  
+            else if (peek() == '/' && (state == "Number" ||  state == "Date")) {
+                buffer.append(consume());  
                 state = "Date";
             }
 
             // Building a Decimal Number Literal
-            else if (peekChar() == '.' && (state == "Number")) {
-                buffer.append(consumeChar());  
+            else if (peek() == '.' && (state == "Number")) {
+                buffer.append(consume());  
                 state = "Decimal";
             }
 
@@ -121,45 +122,45 @@ public class Tokeniser {
                 if (singleChar != null) return singleChar;
 
                 // Otherwise, The token could be a single or double character operator
-                else if (tryConsumeChar(Token.Less)) {
-                    return tryConsumeChar(Token.EqualSign) ? Token.LessEqual : Token.Less;
+                else if (tryConsume(Token.Less)) {
+                    return tryConsume(Token.EqualSign) ? Token.LessEqual : Token.Less;
                 }
 
-                else if (tryConsumeChar(Token.EqualSign)) {
-                    return tryConsumeChar(Token.EqualSign) ? Token.Equals : Token.EqualSign;
+                else if (tryConsume(Token.EqualSign)) {
+                    return tryConsume(Token.EqualSign) ? Token.Equals : Token.EqualSign;
                 }
 
-                else if (tryConsumeChar(Token.Greater)) {
-                    return tryConsumeChar(Token.EqualSign) ? Token.GreaterEqual : Token.Greater;
+                else if (tryConsume(Token.Greater)) {
+                    return tryConsume(Token.EqualSign) ? Token.GreaterEqual : Token.Greater;
                 }
 
-                else if (tryConsumeChar(Token.Exclaim)) {
-                    return tryConsumeChar(Token.EqualSign) ? Token.NotEquals : Token.Exclaim;
+                else if (tryConsume(Token.Exclaim)) {
+                    return tryConsume(Token.EqualSign) ? Token.NotEquals : Token.Exclaim;
                 }
 
                 // Otherwise, token could signal the start of a string literal
-                else if (tryConsumeChar(Token.DoubleQuote)) {
+                else if (tryConsume(Token.DoubleQuote)) {
                     state = "String Literal Double";
                 }
 
-                else if (tryConsumeChar(Token.SingleQuote)) {
+                else if (tryConsume(Token.SingleQuote)) {
                     state = "String Literal Single";
                 }
 
-                // Otherwise, token could be a commant
-                else if (tryConsumeChar(Token.Hashtag)) {
+                // Otherwise, token could be the start of a comment
+                else if (tryConsume(Token.Hashtag)) {
                     state = "Comment";
                 }
 
                 // Otherwise, token is a space and can be ignored.
-                else if (space(peekChar())) {
-                    consumeChar();
+                else if (space(peek())) {
+                    consume();
                 }
 
-                // Finally, if token has not been returned, the character cannot be identified.
+                // Finally, if no token has been returned, the character cannot be identified.
                 // This is likely unreachable.
                 else {
-                    throw new RuntimeException("Invalid token: " + peekChar());
+                    throw new RuntimeException("Invalid token: " + peek());
                 }
             }
         }
@@ -170,15 +171,17 @@ public class Tokeniser {
 
     // List of all single character tokens for simplicity.
     private static final List<Token> singles = List.of(
-        Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, Token.Asterisk, Token.ForwardSlash, Token.Percent, 
-        Token.Caret, Token.At, Token.Underscore, Token.Question, Token.Comma, Token.Colon, Token.Newline, Token.Period, 
-        Token.SemiColon, Token.BackSlash, Token.OpenParen, Token.CloseParen, Token.OpenCurly, Token.CloseCurly, Token.OpenSquare, 
+        Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, 
+        Token.Asterisk, Token.ForwardSlash, Token.Percent, Token.Caret, Token.At, 
+        Token.Underscore, Token.Question, Token.Comma, Token.Colon, Token.Newline, 
+        Token.Period, Token.SemiColon, Token.BackSlash, Token.OpenParen, 
+        Token.CloseParen, Token.OpenCurly, Token.CloseCurly, Token.OpenSquare, 
         Token.CloseSquare
     );
 
     private Token consumeSingleCharToken() {
         for (Token t : singles) {
-            if (tryConsumeChar(t)) {
+            if (tryConsume(t)) {
                 return t;
             }
         }
@@ -207,29 +210,40 @@ public class Tokeniser {
         }
         return null;
     }
+    private boolean tryConsume(Token token) {
+        final boolean success;
+        if (success = String.valueOf(peek()).equals(token.value)) {
+            consume();
+        }
+        return success;
+    }
 
     /*
      * Character Handling
      * 
-     * A lot simpler than the token handling functions seen above. This is thanks
-     * to the fact that all Characters are present and easily accessible. A simple
-     * pointer address where the current character being read is, and the expression
-     * string itself is never modified.
+     * Keep track of our positions in the program string and advance only when
+     * needed. The tokeniser can peek() to see what character is currently being
+     * read and available to pick up for processing. To progress forward the 
+     * tokeniser can consume() the character.
+     * 
+     * Other helper functions exist to make peeking and consuming easier, like
+     * tryConsume(), and getKeyword().
      */
-    private boolean tryConsumeChar(Token token) {
-        final boolean success;
-        if (success = String.valueOf(peekChar()).equals(token.value)) {
-            consumeChar();
-        }
-        return success;
-    }
     
-    private char peekChar() {
+    private char peek() {
         return expression.charAt(charIndex);
     }
 
-    private char consumeChar() {
+    private char consume() {
         return expression.charAt(charIndex++);
+    }
+    
+    public void reset() {
+        charIndex = 0;
+    }
+
+    public String toString() {
+        return expression;
     }
 
     // Helper character identification functions.
@@ -247,14 +261,6 @@ public class Tokeniser {
 
     private boolean space(Character c) {
         return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\b';
-    }
-
-    public void reset() {
-        charIndex = 0;
-    }
-
-    public String toString() {
-        return expression;
     }
 }
 
@@ -319,7 +325,7 @@ class Token {
     public static final Token At = new Token("@", TokenType.Punctuation);
     public static final Token Underscore = new Token("_", TokenType.Punctuation);
     public static final Token Hashtag = new Token("#", TokenType.Punctuation);
-    public static final Token Exclaim = new Token("!", TokenType.Punctuation);
+    public static final Token Exclaim = new Token("!", Set.of(TokenType.Punctuation, TokenType.UnaryArithmetic), 0);
     public static final Token Question = new Token("?", TokenType.Punctuation);
     public static final Token Comma = new Token(",", TokenType.Punctuation);
     public static final Token Colon = new Token(":", TokenType.Punctuation);
