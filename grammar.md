@@ -1,40 +1,73 @@
-Praser syntax:
+# Grammar
+The following is the grammer of the SMG language. The grammmar is built using
+a list of rules called 'productions'. Productions can interact with each other
+in intricate ways to create more productions. Strings shown with single quotes
+are shorthands for productions that can only generate the given string, for
+example, 'let' can only accept the characters 'l', 'e' and 't' in that order.
+EOT is a special production that can only accept an 'End of Tokens' token.
 
-Scope       -> '{' ([Statement] ('\n' | ';' | EOT))* '}'
-Statement   -> [Declaration] | [If] | [While] | [Function] | [Return] | [Scope] | [Assignment] | [Expression]
-Assignment  -> [Variable] '=' [Expression] | [ArrayAccess] '=' [Expression]
-Declaration -> 'let' [Variable] '=' [Expression] | 'let' [Variable] '=' '[' [Integer] ']'
-If          -> 'if' [Expression] [Scope] ('else if' [Expression] [Scope]) ('else' [Scope]) 
-While       -> 'while' [Expression] [Scope]
-Function    -> 'define' [Variable] '(' ([Variable])* ')' [Scope]
-Return      -> 'return' [Expression]
+Production operations:
+[Prod]*            - Repeated 0 or more times
+[Prod]+            - Repeated 1 or more times
+[Prod]?            - Optional
+[Prod] | [Prod]    - A choice between one production and another
+([Prod])           - Parenthesis indicate groupings for clarity
 
-Expression  -> [Term] | [Term] [Operator] [Term]         
-Term        -> '(' [Expression] ')' | [Literal] | [Variable] | [Call] | [ArrayAccess]
-Call        -> [Variable] '(' ([Expression])* ')'
-Literal     -> [Boolean] | [String] | [Integer] | [Decimal] | [Date] | [Array]
-ArrayAccess -> [Variable] '[' [Integer] ']'
+# Program
+Program     -> [StmtTerm]* ([Statement] ([StmtTerm]+ [Statement])* [StmtTerm]*)?
+Scope       -> '{' [Program] '}'
+StmtTerm    -> '\n' | ';'
+Statement   -> [Scope] | [Assign] | [Expr] | [Control] | [Definition] | [Comment]
+Control     -> [If] | [While] | [ForEach] | [ForLoop] | [Break] | [Continue] | [Try]
+Definition  -> [Decl] | [Func] | [Return]
+Comment     -> '#' (_Anything_)* '\n'
 
+# Statements
+Assign      -> ([Variable] | [ArrayAccess] | [Accessor]) [AssignOp] [Expr]
+Decl        -> 'let' [Variable] '=' [Expr]
+If          -> 'if' [Expr] [Scope] ('else if' [Expr] [Scope])* ('else' [Scope])?
+Try         -> 'try' [Scope] ('catch' [Qualifier] [Scope])? ('finally' [Scope])?
+While       -> 'while' [Expr] [Scope]
+ForEach     -> 'for' '(' [Qualifier] 'in' [Term] ')' [Scope]
+ForLoop     -> 'for' '(' ([Assign] | [Decl])? ';' [Expr]? ';' ([Assign] | [Expr])? ')' [Scope]
+Func        -> 'define' [Variable] '(' ([Param] (',' [Param])*)? ')' [Scope]
+Expr        -> [Term] ([BinaryOp] [Term])?
+Return      -> 'return' [Expr]?
+Break       -> 'break'
+Continue    -> 'continue'
+
+# Terms
+Term        -> '(' [Expr] ')' | [ArrayLit] | [MapLit] | [UnaryExpr] | [ArrayAccess] | 
+    [Qualifier] | [Accessor] | [Literal] | [FCall] | [Cast]
+UnaryExpr   -> [UnaryOp] [Term]
+Accessor    -> [Term] '.' [Qualifier]
+FCall       -> [Term] '(' [ExprList]? ')'
+Cast        -> [Term] 'as' [Type]
+
+# Maps and Arrays
+ArrayAccess -> [Term] '[' [Expr] ']'
+ExprList    -> [Expr] (',' [Expr])*
+Param       -> [Variable] ('=' [Expr])
+KVList      -> [Qualifier] ':' [Expr] (',' [Qualifier] ':' [Expr])*
+MapLit      -> '{' [KVList]? '}'
+ArrayLit    -> '[' [ExprList]? ']'
+
+# Variable
+Qualifier   -> ([Letter] | [Underscore]) ([Letter] | [Underscore] | [Digit])* 
+Letter      -> [A-Za-z]
+Underscore  -> '_'
+
+# Literals
+Literal     -> [Empty] | [Boolean] | [String] | [Decimal] | [Integer]
+Empty       -> 'empty'
 Boolean     -> 'true' | 'false'
-String      -> '\"' ([Anything])* '\"'
+String      -> ('\"' (_Anything_)* '\"') | ('\'' (_Anything_)* '\'')
 Decimal     -> [Integer] '.' [Integer]
-Integer     -> ( '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' )*
-Date        -> [Integer] '/' [Integer] '/' [Integer]
-Array       -> '[' ([Expression])* ']'
+Integer     -> [Digit]+
+Digit       -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
 
-Operator    ->  '^'                                 prec = 8
-                '*'   | '/'   | '%'                 prec = 7
-                '+'   | '-'                         prec = 6
-                '<<'  | '>>'                        prec = 5
-                '>'   | '<'   | '>='  | '<='        prec = 4
-                '=='  | '!='                        prec = 3
-                '&'   | '|'   | 'xor'               prec = 2
-                'and' | 'or'                        prec = 1
+AssignOp    -> '=' | '^=' | '*=' | '/=' | '%=' | '+=' | '-=' | '&=' | '|='
+UnaryOp     -> '-' | '~' | '!' | 'not'
+BinaryOp    -> '^' | '*' | '/' | '%' | '+' | '-' | '<<' | '>>' | 
+    '>' | '<' | '>=' | '<=' | '==' | '!=' | '&' | '|' | 'xor' | 'and' | 'or'
 
-
-features to add:
-- else if
-- Arrays
-  - Array operations: member access, append, push, pop, 
-- Types (?)
-<!-- - standalone scopes -->
