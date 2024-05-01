@@ -106,13 +106,26 @@ public class Parser {
         // Try Catch
         else if ((statement = parseTryCatch()) != null);
         
-        // Assignment
-        else if ((statement = parseAssignment()) != null);
-
-        // Bare Expressions
+        // Disambiguate between assignments and expressions
         else {
-            final NodeExpr expr = parseExpression();
-            statement = expr == null ? null : new NodeStmt.Expr(expr);
+
+            final NodeTerm start = parseTerm();
+            final boolean assignType = start instanceof NodeTerm.ArrayAccess || 
+                start instanceof NodeTerm.PropAccess || 
+                start instanceof NodeTerm.Variable;
+
+            // Assignment
+            if (assignType && peek().isAny(TokenType.AssignOperator)) {
+                final Token op = tryConsume(TokenType.AssignOperator);
+                final NodeExpr expr = tryParse(() -> parseExpression(), "Expected expression");
+                return arthmeticAssignNode(op, start, expr);
+            }
+
+            // Bare Expression
+            else {
+                final NodeExpr expr = parseExpression(new NodeExpr.Term(start), 0);
+                statement = expr == null ? null : new NodeStmt.Expr(expr);
+            }
         }
 
         return statement;
@@ -220,16 +233,6 @@ public class Parser {
         final NodeScope scope = parseScope();
         return scope == null ? null : new NodeStmt.Scope(scope);
     }
-
-    // Assign -> ([Variable] | [ArrayAccess] | [Accessor]) [AssignOp] [Expr]
-    private NodeStmt.Assign parseAssignment() {
-        final NodeVar var = tryParse(() -> parseVariable(), "Expected qualifier: " + peek().value);
-        tryConsume(Token.EqualSign, "Expected '='");
-        
-        final NodeExpr expr = parseExpression();
-        return new NodeStmt.Assign(var, expr);
-    }
-
     
     // Break -> 'break'
     // Continue -> 'continue'
@@ -339,6 +342,19 @@ public class Parser {
         }
     }
 
+    private NodeStmt.Assign arthmeticAssignNode(Token op, NodeTerm lhs, NodeExpr rhs) {
+        if (op == Token.PlusEqual)         return new NodeStmt.Assign(AssignOp.AddEqual, lhs, rhs);
+        else if (op == Token.SubtractEqual)     return new NodeStmt.Assign(AssignOp.SubEqual, lhs, rhs);
+        else if (op == Token.MultiplyEqual)     return new NodeStmt.Assign(AssignOp.MultiplyEqual, lhs, rhs);
+        else if (op == Token.ModEqual)          return new NodeStmt.Assign(AssignOp.ModEqual, lhs, rhs);
+        else if (op == Token.DivideEqual)       return new NodeStmt.Assign(AssignOp.DivideEqual, lhs, rhs);
+        else if (op == Token.AndEqual)          return new NodeStmt.Assign(AssignOp.AndEqual, lhs, rhs);
+        else if (op == Token.OrEqual)           return new NodeStmt.Assign(AssignOp.OrEqual, lhs, rhs);
+        else {
+            throw error("Unsupported arithmetic operation: " + peek().value);
+        }
+    }
+
     private NodeExpr arthmeticNode(Token op, NodeExpr val) {
         if (op == Token.Hyphen) return new NodeExpr.Unary(UnaryOp.Negate, val);
         else if (op == Token.Tilde) return new NodeExpr.Unary(UnaryOp.Invert, val);
@@ -350,7 +366,7 @@ public class Parser {
     }
 
     // MARK: Parse Term
-    private NodeExpr parseTerm() {
+    private NodeTerm parseTerm() {
         cacheLineNumber();
         if (tryConsume(Token.OpenParen)) {
             final NodeExpr exp = tryParse(() -> parseExpression(), "Unparsable/Invalid expression");
@@ -581,10 +597,10 @@ abstract class NodeStmt {
     }
     
     static class Assign extends NodeStmt {
-        final NodeVar var; final NodeExpr expr;
+        final NodeTerm term; final AssignOp op; final NodeExpr expr;
         public Object host(Visitor v) { return v.visit(this); }
-        public String toString() { return String.format("%s = %s", var, expr); }
-        Assign(NodeVar q, NodeExpr e) { var = q; expr = e; }
+        public String toString() { return String.format("%s %s %s", term, op, expr); }
+        Assign(AssignOp o, NodeTerm q, NodeExpr e) { op = o; term = q; expr = e; }
     }
     
     static class PropAssign extends NodeStmt {
@@ -681,6 +697,9 @@ enum BinaryOp {
 }
 
 enum UnaryOp { Increment, Decrement, Negate, Invert, Not }
+
+enum AssignOp { AddEqual, SubEqual, MultiplyEqual, DivideEqual, ModEqual, AndEqual, OrEqual }
+
 abstract class NodeExpr {
     public int lineNumber = 0;
     static class Binary extends NodeExpr {
