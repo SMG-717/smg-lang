@@ -1,4 +1,4 @@
-package com.forenzix.interpreter;
+package smg.interpreter;
 
 /*
  * Token Types
@@ -8,7 +8,7 @@ package com.forenzix.interpreter;
  * the current implementation of the Tokeniser.
  */
 public enum TokenType {
-    Qualifier, Keyword, Punctuation, WhiteSpace, Comment,
+    Qualifier, Keyword, CastType, Punctuation, WhiteSpace, Comment,
     NumberLiteral, StringLiteral, BooleanLiteral, DateLiteral,
     BinaryArithmetic, UnaryArithmetic, AssignOperator,
     StatementTerminator, ScopeTerminator;

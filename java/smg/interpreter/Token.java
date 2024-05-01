@@ -1,4 +1,4 @@
-package com.forenzix.interpreter;
+package smg.interpreter;
 
 import java.util.Set;
 
@@ -31,8 +31,17 @@ public class Token {
     static final Token Catch = new Token("catch", TokenType.Keyword);
     static final Token Finally = new Token("finally", TokenType.Keyword);
     static final Token Return = new Token("return", TokenType.Keyword);
+    static final Token As = new Token("as", TokenType.Keyword);
     static final Token True = new Token("true", TokenType.BooleanLiteral);
     static final Token False = new Token("false", TokenType.BooleanLiteral);
+
+    static final Token Int = new Token("int", TokenType.CastType);
+    static final Token Long = new Token("long", TokenType.CastType);
+    static final Token Double = new Token("double", TokenType.CastType);
+    static final Token Float = new Token("float", TokenType.CastType);
+    static final Token Character = new Token("char", TokenType.CastType);
+    static final Token String = new Token("string", TokenType.CastType);
+    static final Token Boolean = new Token("boolean", TokenType.CastType);
     
     static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8, true);
     static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);

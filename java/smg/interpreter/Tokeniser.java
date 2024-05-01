@@ -1,4 +1,4 @@
-package com.forenzix.interpreter;
+package smg.interpreter;
 
 import java.util.List;
 
@@ -201,8 +201,34 @@ public class Tokeniser {
     }
 
     private static final List<Token> keywords = List.of(
-        Token.Empty, Token.If, Token.Else, Token.While, Token.Let, Token.True, Token.False,
-        Token.And, Token.Not, Token.Xor, Token.Define, Token.Return, Token.Or, Token.For, Token.In
+        Token.And, 
+        Token.As,
+        Token.Break,
+        Token.Catch, 
+        Token.Continue,
+        Token.Define, 
+        Token.Else, 
+        Token.Empty, 
+        Token.Finally, 
+        Token.False,
+        Token.For, 
+        Token.If, 
+        Token.In,
+        Token.Let, 
+        Token.Not, 
+        Token.Or, 
+        Token.Return, 
+        Token.True, 
+        Token.Try, 
+        Token.While, 
+        Token.Xor,
+        Token.Int,
+        Token.Long,
+        Token.Double,
+        Token.Float,
+        Token.Character,
+        Token.String,
+        Token.Boolean
     );
 
     private Token getKeyword(String value) {

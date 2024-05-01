@@ -1,4 +1,4 @@
-package com.forenzix.interpreter;
+package smg.interpreter;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;

@@ -65,6 +65,7 @@ String      -> ('\"' (_Anything_)* '\"') | ('\'' (_Anything_)* '\'')
 Decimal     -> [Integer] '.' [Integer]
 Integer     -> [Digit]+
 Digit       -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+Type        -> 'int' | 'long' | 'double' | 'float' | 'char' | 'string' | 'boolean'
 
 AssignOp    -> '=' | '^=' | '*=' | '/=' | '%=' | '+=' | '-=' | '&=' | '|='
 UnaryOp     -> '-' | '~' | '!' | 'not'
