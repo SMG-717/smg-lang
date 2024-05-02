@@ -24,7 +24,7 @@ public class Token {
     static final Token For = new Token("for", TokenType.Keyword);
     static final Token In = new Token("in", TokenType.Keyword);
     static final Token Let = new Token("let", TokenType.Keyword);
-    static final Token Define = new Token("define", TokenType.Keyword);
+    static final Token Function = new Token("function", TokenType.Keyword);
     static final Token Break = new Token("break", TokenType.Keyword);
     static final Token Continue = new Token("continue", TokenType.Keyword);
     static final Token Try = new Token("try", TokenType.Keyword);

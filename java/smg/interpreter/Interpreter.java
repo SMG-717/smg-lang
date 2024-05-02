@@ -92,6 +92,10 @@ public class Interpreter {
         scopes.add(new HashMap<>());
     }
 
+    private void enterScope(Map<String, Object> scope) {
+        scopes.add(scope);
+    }
+
     private void exitScope() {
         scopes.removeLast();
     }
@@ -130,6 +134,10 @@ public class Interpreter {
         e.addSuppressed(exception);
         return e;
     }
+
+    private String javaType(Object object) {
+        return object == null ? "null" : object.getClass().getSimpleName();
+    }
     
     // MARK: Run Scope
     public Object interpret() {
@@ -155,13 +163,13 @@ public class Interpreter {
 
     // MARK: Run Statement
     private Object runStmt(NodeStmt s) {return s == null ? null : s.host(stmtVisitor); }
+    @SuppressWarnings("unchecked")
     private final NodeStmt.Visitor stmtVisitor = new NodeStmt.Visitor() {
         
         public Object visit(NodeStmt.Scope scope) {
             return runScope(scope.scope);
         }
 
-        @SuppressWarnings("unchecked")
         public Object visit(NodeStmt.Assign assign) {
             final Object lhs, value;
             if (assign.term instanceof NodeTerm.Variable) {
@@ -205,7 +213,7 @@ public class Interpreter {
                     mupdate.consume(parent, (String) prop, value);
                 }
                 else {
-                    throw error(String.format("Cannot update property %s of %s (type: %s)", prop, parent, parent.getClass().getSimpleName()));
+                    throw error(String.format("Cannot update property %s of %s (type: %s)", prop, parent, javaType(parent)));
                 }
             }
             return value;
@@ -292,33 +300,19 @@ public class Interpreter {
         }
 
         public Object visit(NodeStmt.Function def) {
-            final F function = (Object... args) -> {
-                enterScope();
-                for (int i = 0; i < def.params.size(); i += 1) {
-                    addVar(def.params.get(i).param.name, 
-                        args[i] != null ? args[i] :
-                        runExpr(def.params.get(i)._default),
-                        true
-                    );
-                }
-
-                final Object value = runScope(def.body);
-                exitScope();
-
-                jump = null; // Clear jump flag
-                return value;
-            };
-
+            final FCapture function = (FCapture) exprVisitor.visit(
+                new NodeExpr.Lambda(def.params, def.body)
+            );
             addVar(def.var.name, function, true);
             return function;
         }
 
-        public Object visit(NodeStmt.Break statement) {
+        public Void visit(NodeStmt.Break statement) {
             jump = JumpOperation.BREAK;
             return null;
         }
 
-        public Object visit(NodeStmt.Continue statement) {
+        public Void visit(NodeStmt.Continue statement) {
             jump = JumpOperation.CONTINUE;
             return null;
         }
@@ -351,13 +345,35 @@ public class Interpreter {
 
     // MARK: Run Expression
     private Object runExpr(NodeExpr expr) { line = expr.lineNumber; return expr.host(exprVisitor); }
-    private final NodeExpr.Visitor<Object> exprVisitor = new NodeExpr.Visitor<Object>() {
+    @SuppressWarnings("unchecked")
+    private final NodeExpr.Visitor exprVisitor = new NodeExpr.Visitor() {
         public Object visit(NodeExpr.Term node) {
             return runTerm(node.val);
         }
 
         public Object visit(NodeExpr.Binary node) {
             return calcBinary(node.op, runTerm(node.lhs), runTerm(node.rhs));
+        }
+
+        public FCapture visit(NodeExpr.Lambda def) {
+            final F function = (Object... args) -> {
+                enterScope();
+                for (int i = 0; i < def.params.size(); i += 1) {
+                    addVar(def.params.get(i).param.name, 
+                        args[i] != null ? args[i] :
+                        runExpr(def.params.get(i)._default),
+                        true
+                    );
+                }
+
+                final Object value = runScope(def.body);
+                exitScope();
+
+                jump = null; // Clear jump flag
+                return value;
+            };
+
+            return new FCapture(scopes, function);
         }
     };
 
@@ -518,15 +534,16 @@ public class Interpreter {
             }
         }
 
-        throw error(String.format("Invalid operation (%s) %s (%s)", lhs.getClass().getSimpleName(), op, rhs.getClass().getSimpleName()));
+        throw error(String.format("Invalid operation (%s) %s (%s)", javaType(lhs), op, javaType(rhs)));
     }
 
 
     // MARK: Run Term
     private Object runTerm(NodeTerm term) { return term.host(termVisitor); }
+    @SuppressWarnings("unchecked")
     final NodeTerm.Visitor termVisitor = new NodeTerm.Visitor() {
-        public Object visit(NodeTerm.Literal<?> literal) {
-            return literal.lit;
+        public <T> T visit(NodeTerm.Literal<?> literal) {
+            return (T) literal.lit;
         }
 
         public Object visit(NodeTerm.Variable variable) {
@@ -569,15 +586,24 @@ public class Interpreter {
 
         public Object visit(NodeTerm.Call call) {
             
-            final Object function = runTerm(call.f);
-            if (function instanceof F) {
-                final Object value = ((F) function).apply(call.args.stream().map(a -> runExpr(a)).toArray());
+            final Object f = runTerm(call.f);
+            final Object[] argExprs = call.args.stream().map(a -> runExpr(a)).toArray();
+            if (f instanceof FCapture) {
+                enterScope(((FCapture) f).variables);
+                final Object value = ((FCapture) f).invoke(argExprs);
+                exitScope();
                 return value;
             }
-            else {
-                ((F0) function).apply(call.args.stream().map(a -> runExpr(a)).toArray());
+            else if (f instanceof F) {
+                final Object value = ((F) f).apply(argExprs);
+                return value;
+            }
+            else if (f instanceof F0) {
+                ((F0) f).apply(argExprs);
                 return null;
             }
+            
+            throw error("Unsupported function type: " + javaType(f));
         }
 
         public Object visit(NodeTerm.Cast cast) {
@@ -632,7 +658,7 @@ public class Interpreter {
             }
             default:
         }
-        throw error(String.format("Invalid unary operation '%s' on value of type %s", op, value.getClass().getSimpleName()));
+        throw error(String.format("Invalid unary operation '%s' on value of type %s", op, javaType(value)));
     }
 
     @SuppressWarnings("unchecked")
@@ -712,22 +738,53 @@ public class Interpreter {
             }
         }
 
-        throw error(String.format("Casting from %s to %s is not allowed.", value.getClass().getSimpleName(), type));
+        throw error(String.format("Casting from %s to %s is not allowed.", javaType(value), type));
     }
 
 
     @FunctionalInterface
-    public interface MemberAccessor<S, M, R> {
+    public static interface MemberAccessor<S, M, R> {
         public R apply(S source, M member);
     }
     
     @FunctionalInterface
-    public interface MemberUpdater<S, M, R> {
+    public static interface MemberUpdater<S, M, R> {
         public void consume(S source, M member, R rvalue);
     }
     
     @FunctionalInterface
-    public interface F { public Object apply(Object... args); }
-    public interface F0 { public void apply(Object... args); }
+    public static interface F { public Object apply(Object... args); }
+    
+    @FunctionalInterface
+    public static interface F0 { public void apply(Object... args); }
+    
+    private static class FCapture {
+        public final Map<String, Object> variables;
+        private final Object function;
+
+        public FCapture(List<Map<String, Object>> stack, Object f) {
+            variables = new HashMap<>();
+            for (Map<String, Object> map : stack) {
+                variables.putAll(map);
+            }
+
+            if ((function = f) == null) {
+                throw new IllegalArgumentException("Supplying null for function is not allowed");
+            }
+        }
+
+        public Object invoke(Object... args) {
+            if (function instanceof F) {
+                return ((F) function).apply(args);
+            }
+            else if (function instanceof F0) {
+                ((F0) function).apply(args);
+                return null;
+            }
+            else {
+                throw new RuntimeException("Unsupported function type: " + function.getClass().getSimpleName());
+            }
+        }
+    }
 }
 

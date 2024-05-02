@@ -8,10 +8,18 @@ println("y", y)
 
 # If Statement
 let item = 7
-if (item > 5) { println(">5: ", item) }
-else if (item > 1) { println(">1: ", item) }
-else if (item) { println("=1: ", item) }
-else { println("=0: ", item) }
+if (item > 5) { 
+    println(">5: ", item) 
+}
+else if (item > 1) {
+    println(">1: ", item) 
+}
+else if (item) { 
+    println("=1: ", item) 
+}
+else { 
+    println("=0: ", item) 
+}
 
 # While Loops
 let i = 0
@@ -30,39 +38,41 @@ for (name in names) {
 
 # Jump Statements
 # All of the following should output '0 1 3 4'
-print("For Test ->")
+print("For Test -> ")
 for (let j = 0; j < 10; j += 1) {
-    if (j == 2) { continue }
-    else if (j == 5) { break }
-    print(j)
+    if (j == 2) { 
+        continue 
+    }
+    else if (j == 5) { 
+        break 
+    }
+    print(j,"")
 }
 
 println()
-print("For Each Test ->")
+print("For Each Test -> ")
 for (j in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     if (j == 2) { continue }
     else if (j == 5) { break }
-    print(j)
+    print(j,"")
 }
 
 println()
-print("While Test ->")
+print("While Test -> ")
 let j = 0
 while (j < 10) {
     if (j == 2) { j += 1; continue; }
     else if (j == 5) { break }
-    print(j)
+    print(j,"")
     j += 1
 }
 
-define fibonacci(n) {
+function fibonacci(n) {
     let a = 0; let b = 1; let c = 0;
     let max = 50
     while (true) {
         let temp = a + b
-        a = b
-        b = temp
-        c += 1
+        a = b; b = temp; c += 1
         if (c >= n or c > max) { break }
     }
 
@@ -73,5 +83,36 @@ define fibonacci(n) {
 println()
 print("Fibonacci Test -> ")
 for (let i = 0; i < 10; i += 1) {
-    print(fibonacci(i))
+    print(fibonacci(i),"")
 }
+
+# Functions
+function multiplier(m) {
+    function mult(x) { 
+        return x * m 
+    }
+    return mult
+}
+
+let tripler = multiplier(3)
+println()
+for (i in [1, 2, 3]) {
+    print(tripler(i), "")
+}
+
+println()
+println("5 * 6 =", multiplier(5)(6))
+println("8 * 9 =", (function (a) a * 8)(9))
+println("7 * 4 =", (function (a) {return a * 7})(4))
+
+let woah = function (x) function (y) x * y
+println(woah(12)(13)) # = 156
+
+println({ 
+    name: "SMG", 
+    age: 23, 
+    props: { 
+        wealth: "broke", 
+        loves: [ "Yoimiya" ]
+    } 
+})

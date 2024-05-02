@@ -11,9 +11,11 @@ public class Main {
 
         final Interpreter interpreter = new Interpreter(code);
         final F0 print = arg -> {
-            for (Object a : arg) {
-                System.out.print(a);
+            if (arg.length == 0) return;
+            System.out.print(arg[0]);
+            for (int i = 1; i < arg.length; i += 1) {
                 System.out.print(" ");
+                System.out.print(arg[i]);
             }
         };
 

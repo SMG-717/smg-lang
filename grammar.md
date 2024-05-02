@@ -30,7 +30,7 @@ Try         -> 'try' [Scope] ('catch' [Qualifier] [Scope])? ('finally' [Scope])?
 While       -> 'while' [Expr] [Scope]
 ForEach     -> 'for' '(' [Qualifier] 'in' [Term] ')' [Scope]
 ForLoop     -> 'for' '(' ([Assign] | [Decl])? ';' [Expr]? ';' ([Assign] | [Expr])? ')' [Scope]
-Func        -> 'define' [Qualifier] '(' (([Param]) (',' ([Param]))*)? ')' [Scope]
+Func        -> 'function' [Qualifier] '(' (([Param]) (',' ([Param]))*)? ')' [Scope]
 Expr        -> [Term] ([BinaryOp] [Term])?
 Return      -> 'return' [Expr]?
 Break       -> 'break'
@@ -38,11 +38,12 @@ Continue    -> 'continue'
 
 # Terms
 Term        -> '(' [Expr] ')' | [ArrayLit] | [MapLit] | [UnaryExpr] | [ArrayAccess] | 
-    [Qualifier] | [Accessor] | [Literal] | [FCall] | [Cast]
+    [Qualifier] | [Accessor] | [Literal] | [FCall] | [Cast] | [Lambda]
 UnaryExpr   -> [UnaryOp] [Term]
 Accessor    -> [Term] '.' [Qualifier]
 FCall       -> [Term] '(' ([Expr] (',' [Expr])*)? ')'
 Cast        -> [Term] 'as' [Type]
+Lambda      -> 'function' '('(([Param]) (',' ([Param]))*)? ')' ([Scope] | [Expr])
 
 # Maps and Arrays
 ArrayAccess -> [Term] '[' [Expr] ']'

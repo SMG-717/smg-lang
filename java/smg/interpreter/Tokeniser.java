@@ -206,7 +206,7 @@ public class Tokeniser {
         Token.Break,
         Token.Catch, 
         Token.Continue,
-        Token.Define, 
+        Token.Function, 
         Token.Else, 
         Token.Empty, 
         Token.Finally, 
