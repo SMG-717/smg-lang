@@ -2,7 +2,6 @@ package smg.interpreter;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class Parser {
@@ -25,6 +24,7 @@ public class Parser {
     public NodeScope parse() {
         tokeniser.reset();
         lineNumber = 1;
+        skipBlank();
         root = parseProgram();
 
         if (peek() != Token.EOT) {
@@ -62,7 +62,9 @@ public class Parser {
         while (peek() != Token.EOT) {
 
             // [StmtTerm]+ | [StmtTerm]*
-            if (!peek().isAny(TokenType.StatementTerminator)) return scope;
+            // It is possible that we might not have a statement terminator here
+            // because tryConsume eats new lines. For now, we disable this check.
+            // if (!peek().isAny(TokenType.StatementTerminator)) return scope;
             while (tryConsume(TokenType.StatementTerminator) != null);
             
             // [Statement]
@@ -110,9 +112,14 @@ public class Parser {
         // Note: Not sure if there's a better way to do this - SMG
         else {
             final NodeTerm start = parseTerm();
-            if ((statement = parseAssignment(start)) == null) {
-                final NodeExpr expr = parseExpression(new NodeExpr.Term(start), 0);
-                statement = expr == null ? null : new NodeStmt.Expr(expr);
+            if ((statement = parseAssignment(start)) == null && start != null) {
+                if (start instanceof NodeTerm.Expr) {
+                    // statement = ((NodeTerm.Expr) statement).expr;
+                    statement = new NodeStmt.Expr(((NodeTerm.Expr) start).expr);
+                }
+                else {
+                    statement = new NodeStmt.Expr(new NodeExpr.Term(start));
+                }
             }
         }
 
@@ -123,14 +130,14 @@ public class Parser {
     private NodeStmt.Declare parseDecl() {
         if (!tryConsume(Token.Let)) return null; 
 
-        final NodeVar var = tryParse(() -> parseVariable(), "Expected qualifier: " + peek().value);
+        final NodeVar var = tryParse(parseVariable(), "Expected qualifier: " + peek().value);
         final NodeExpr expr;
         if (!tryConsume(Token.EqualSign)) {
             // Default value of declared variables is null
             expr = new NodeExpr.Term(new NodeTerm.Literal<Void>(null));
         }
         else {
-            expr = tryParse(() -> parseExpression(), "Expected expression.");
+            expr = tryParse(parseExpression(), "Expected expression.");
         }
 
         return new NodeStmt.Declare(var, expr);
@@ -140,14 +147,14 @@ public class Parser {
     private NodeStmt.If parseIf() {
         if (!tryConsume(Token.If)) return null; 
 
-        final NodeExpr expr = tryParse(() -> parseExpression(), "Expected condition.");
-        final NodeScope scope = tryParse(() -> parseScope(), "Unparsable Scope.");
+        final NodeExpr expr = tryParse(parseExpression(), "Expected condition.");
+        final NodeScope scope = tryParse(parseScope(), "Unparsable Scope.");
         
         final NodeScope scopeElse;
-        if (!tryConsume(Token.Else)) {
+        if (tryConsume(Token.Else)) {
             scopeElse = peek() == Token.If ? 
             new NodeScope(List.of(parseIf())) : 
-            tryParse(() -> parseScope(), "Expected else block.");
+            tryParse(parseScope(), "Expected else block.");
         }
         else {
             scopeElse = null;
@@ -160,8 +167,8 @@ public class Parser {
         if (!tryConsume(Token.While)) return null;
         
         return new NodeStmt.While(
-            tryParse(() -> parseExpression(), "Expected condition."), 
-            tryParse(() -> parseScope(), "Unparsable Scope.")
+            tryParse(parseExpression(), "Expected condition."), 
+            tryParse(parseScope(), "Unparsable Scope.")
         );
     }
 
@@ -177,18 +184,18 @@ public class Parser {
         if (peek().isAny(TokenType.Qualifier)) {
             int ahead = 1;
             while (peek(ahead) == Token.Newline || peek(ahead).isAny(TokenType.Comment)) ahead += 1;
-            foreach = peek() == Token.In;
+            foreach = peek(ahead) == Token.In;
         }
         
         // For Each
         if (foreach) {
-            final NodeVar iterator, list;
+            final NodeVar iterator; final NodeTerm list;
             iterator = parseVariable();
             tryConsume(Token.In);
-            list = tryParse(() -> parseVariable(), "Expected variable.");
+            list = tryParse(parseTerm(), "Expected variable.");
             tryConsume(Token.CloseParen, "Expected ')'");
 
-            final NodeScope scope = tryParse(() -> parseScope(), "Unparsable Scope.");
+            final NodeScope scope = tryParse(parseScope(), "Unparsable Scope.");
             return new NodeStmt.ForEach(iterator, list, scope);
         }
 
@@ -198,14 +205,14 @@ public class Parser {
             final NodeExpr condition;
             final NodeStmt.Assign increment;
 
-            init = peek() != Token.SemiColon ? tryParse(() -> parseDecl(), "Expected declaration.") : null;
+            init = peek() != Token.SemiColon ? tryParse(parseDecl(), "Expected declaration.") : null;
             tryConsume(Token.SemiColon, "Expected ';'");
-            condition = peek() != Token.SemiColon ? tryParse(() -> parseExpression(), "Expected boolean expression") : null;
+            condition = peek() != Token.SemiColon ? tryParse(parseExpression(), "Expected boolean expression") : null;
             tryConsume(Token.SemiColon, "Expected ';'");
-            increment = peek() != Token.CloseParen ? tryParse(() -> parseAssignment(parseTerm()), "Expected increment expression") : null;
+            increment = peek() != Token.CloseParen ? tryParse(parseAssignment(parseTerm()), "Expected increment expression") : null;
 
             tryConsume(Token.CloseParen, "Expected ')'");
-            final NodeScope scope = tryParse(() -> parseScope(), "Unparsable Scope.");
+            final NodeScope scope = tryParse(parseScope(), "Unparsable Scope.");
             return new NodeStmt.For(init, condition, increment, scope);
         }
     }
@@ -230,17 +237,17 @@ public class Parser {
     private NodeStmt.Function parseFunction() {
         if (!tryConsume(Token.Define)) return null;
          
-        final NodeVar function = tryParse(() -> parseVariable(), "Expected function name");
+        final NodeVar function = tryParse(parseVariable(), "Expected function name");
         tryConsume(Token.OpenParen, "Expected '('");
         final List<NodeParam> params = new LinkedList<>();
         if (peek() != Token.CloseParen) {
             do {
-                params.add(tryParse(() -> parseParam(), "Unexpected Token: " + peek().value));
+                params.add(tryParse(parseParam(), "Unexpected Token: " + peek().value));
             } 
             while (tryConsume(Token.Comma));
         }
         tryConsume(Token.CloseParen, "Expected ')'");
-        return new NodeStmt.Function(function, params, tryParse(() -> parseScope(), "Expected function body"));
+        return new NodeStmt.Function(function, params, tryParse(parseScope(), "Expected function body"));
     }
 
     // Param -> [Variable] ('=' [Expr])
@@ -249,7 +256,7 @@ public class Parser {
 
         return param == null ? null : 
             new NodeParam(param, !tryConsume(Token.EqualSign) ? null :
-            tryParse(() -> parseExpression(), "Expected default paramter value")
+            tryParse(parseExpression(), "Expected default paramter value")
         );      
     }
     
@@ -260,18 +267,18 @@ public class Parser {
         final NodeScope tryScope, catchScope, finallyScope;
         final NodeVar err;
 
-        tryScope = tryParse(() -> parseScope(), "Expected try block.");
+        tryScope = tryParse(parseScope(), "Expected try block.");
         if (tryConsume(Token.Catch)) {
             tryConsume(Token.OpenParen, "Expected '('");
-            err = tryParse(() -> parseVariable(), "Expected error variable");
+            err = tryParse(parseVariable(), "Expected error variable");
             tryConsume(Token.CloseParen, "Expected ')'");
-            catchScope = tryParse(() -> parseScope(), "Expected catch block.");
+            catchScope = tryParse(parseScope(), "Expected catch block.");
         }
         else {
             catchScope = null; err = null;
         }
 
-        finallyScope = tryConsume(Token.Finally) ? tryParse(() -> parseScope(), "Expected finally block.") : null;
+        finallyScope = tryConsume(Token.Finally) ? tryParse(parseScope(), "Expected finally block.") : null;
         return new NodeStmt.TryCatch(tryScope, catchScope, err, finallyScope);
     }
 
@@ -285,13 +292,14 @@ public class Parser {
         if (!(assignType && peek().isAny(TokenType.AssignOperator))) return null;
         
         final Token op = tryConsume(TokenType.AssignOperator);
-        final NodeExpr expr = tryParse(() -> parseExpression(), "Expected expression");
+        final NodeExpr expr = tryParse(parseExpression(), "Expected expression");
         return arthmeticAssignNode(op, start, expr);
     }
 
     private NodeStmt.Assign arthmeticAssignNode(Token op, NodeTerm lhs, NodeExpr rhs) {
         final AssignOp aop;
-        if (op == Token.PlusEqual)              aop = AssignOp.AddEqual;
+        if (op == Token.EqualSign)              aop = AssignOp.AssignEqual;
+        else if (op == Token.PlusEqual)         aop = AssignOp.AddEqual;
         else if (op == Token.SubtractEqual)     aop = AssignOp.SubEqual;
         else if (op == Token.MultiplyEqual)     aop = AssignOp.MultiplyEqual;
         else if (op == Token.ModEqual)          aop = AssignOp.ModEqual;
@@ -308,28 +316,28 @@ public class Parser {
     // MARK: Parse Expression
     private NodeExpr parseExpression() {
         cacheLineNumber();
-        return lineNumerise(parseExpression(new NodeExpr.Term(parseTerm()), 0));
+        return lineNumerise(parseExpression(parseTerm(), 0));
     }
     
-    private NodeExpr parseExpression(NodeExpr left, int prec) {
+    private NodeExpr parseExpression(NodeTerm left, int prec) {
         cacheLineNumber();
-        NodeExpr expr = left;
+        NodeTerm expr = left;
         while (peek().isAny(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
             final Token op = consume();
-            NodeExpr right = new NodeExpr.Term(parseTerm());
+            NodeTerm right = parseTerm();
 
             while (peek().isAny(TokenType.BinaryArithmetic) && (
                 (peek().precedence > op.precedence) || 
                 (peek().precedence >= op.precedence && peek().rightassoc))) {
-                right = parseExpression(right, op.precedence + (peek().precedence > op.precedence ? 1 : 0));
+                right = new NodeTerm.Expr(parseExpression(right, op.precedence + (peek().precedence > op.precedence ? 1 : 0)));
             }
-            expr = arthmeticNode(op, expr, right);
+            expr = new NodeTerm.Expr(arthmeticNode(op, expr, right));
         }
 
-        return lineNumerise(expr);
+        return lineNumerise(new NodeExpr.Term(expr));
     }
 
-    private NodeExpr.Binary arthmeticNode(Token op, NodeExpr lhs, NodeExpr rhs) {
+    private NodeExpr.Binary arthmeticNode(Token op, NodeTerm lhs, NodeTerm rhs) {
         final BinaryOp bop;
         if (op == Token.Plus)               bop = BinaryOp.Add;
         else if (op == Token.Hyphen)        bop = BinaryOp.Subtract;
@@ -357,12 +365,12 @@ public class Parser {
     private NodeTerm parseTerm() {
         NodeTerm term;
 
-        if ((term = parseTermExpr()) == null);
-        else if ((term = parseArrayLiteral()) == null);
-        else if ((term = parseMapLiteral()) == null);
-        else if ((term = parseUnaryExpr()) == null);
-        else if ((term = parseTermVariable()) == null);
-        else if ((term = parseLiteral()) == null);
+        if ((term = parseTermExpr()) != null);
+        else if ((term = parseArrayLiteral()) != null);
+        else if ((term = parseMapLiteral()) != null);
+        else if ((term = parseUnaryExpr()) != null);
+        else if ((term = parseTermVariable()) != null);
+        else if ((term = parseLiteral()) != null);
         else {
             return null;
         }
@@ -371,10 +379,10 @@ public class Parser {
         // to modify it.
         NodeTerm moddedTerm = null;
         while (peek() != Token.EOT) {
-            if ((moddedTerm = parseArrayAccess(term)) == null);
-            else if ((moddedTerm = parsePropAccess(term)) == null);
-            else if ((moddedTerm = parseCall(term)) == null);
-            else if ((moddedTerm = parseCast(term)) == null);
+            if ((moddedTerm = parseArrayAccess(term)) != null);
+            else if ((moddedTerm = parsePropAccess(term)) != null);
+            else if ((moddedTerm = parseCall(term)) != null);
+            else if ((moddedTerm = parseCast(term)) != null);
             
             if (moddedTerm == null) return term;
 
@@ -385,13 +393,17 @@ public class Parser {
     }
 
     // Term.Expr -> '(' [Expr] ')'
-    private NodeTerm.Expr parseTermExpr() {
+    private NodeTerm parseTermExpr() {
         if (!tryConsume(Token.OpenParen)) return null;
 
         final NodeTerm.Expr term = new NodeTerm.Expr(
-            tryParse(() -> parseExpression(), "Expected expression.")
+            tryParse(parseExpression(), "Expected expression.")
         );
         tryConsume(Token.CloseParen);
+
+        if (term.expr instanceof NodeExpr.Term) {
+            return ((NodeExpr.Term) term.expr).val;
+        }
         return term;
     }
 
@@ -403,7 +415,7 @@ public class Parser {
         if (tryConsume(Token.CloseSquare)) return arr;
         
         do {
-            arr.items.add(tryParse(() -> parseExpression(), "Expected expression"));
+            arr.items.add(tryParse(parseExpression(), "Expected expression"));
         } 
         while (tryConsume(Token.Comma));
 
@@ -419,9 +431,9 @@ public class Parser {
         if (tryConsume(Token.CloseCurly)) return arr;
         
         do {
-            final NodeVar key = tryParse(() -> parseVariable(), "Expected variable");
+            final NodeVar key = tryParse(parseVariable(), "Expected variable");
             tryConsume(Token.Colon, "Expected ':");
-            final NodeExpr value = tryParse(() -> parseExpression(), "Expected expression");
+            final NodeExpr value = tryParse(parseExpression(), "Expected expression");
             arr.items.add(new NodeMapEntry(key, value));
         } 
         while (tryConsume(Token.Comma));
@@ -435,7 +447,7 @@ public class Parser {
         final Token uop;
         if ((uop = tryConsume(TokenType.UnaryArithmetic)) == null) return null;
 
-        return unaryArthmeticNode(uop, tryParse(() -> parseTerm(), "Expected atomic expression"));
+        return unaryArthmeticNode(uop, tryParse(parseTerm(), "Expected atomic expression"));
     }
     
     
@@ -443,8 +455,7 @@ public class Parser {
         final UnaryOp uop;
         if (op == Token.Hyphen)         uop = UnaryOp.Negate;
         else if (op == Token.Tilde)     uop = UnaryOp.Invert;
-        else if (op == Token.Not)       uop = UnaryOp.Not;
-        else if (op == Token.Exclaim)   uop = UnaryOp.Not;
+        else if (op == Token.Not || op == Token.Exclaim)   uop = UnaryOp.Not;
         else {
             throw error("Unsupported unary arithmetic operation: " + op);
         }
@@ -456,7 +467,7 @@ public class Parser {
     private NodeTerm.ArrayAccess parseArrayAccess(NodeTerm term) {
         if (!tryConsume(Token.OpenSquare)) return null;
 
-        final NodeExpr expr = tryParse(() -> parseExpression(), "Expected array index expression.");
+        final NodeExpr expr = tryParse(parseExpression(), "Expected array index expression.");
         tryConsume(Token.CloseSquare, "Expected ']'");
 
         return new NodeTerm.ArrayAccess(term, expr);
@@ -467,7 +478,7 @@ public class Parser {
         if (!tryConsume(Token.Period)) return null;
 
         return new NodeTerm.PropAccess(term, 
-            tryParse(() -> parseVariable(), "Expected array index expression.")
+            tryParse(parseVariable(), "Expected array index expression.")
         );
     }
 
@@ -479,7 +490,7 @@ public class Parser {
         if (tryConsume(Token.CloseParen)) return call;
         
         do {
-            call.args.add(tryParse(() -> parseExpression(), "Expected expression"));
+            call.args.add(tryParse(parseExpression(), "Expected expression"));
         } 
         while (tryConsume(Token.Comma));
 
@@ -492,7 +503,7 @@ public class Parser {
         if (!tryConsume(Token.As)) return null;
 
         return new NodeTerm.Cast(term, 
-            tryParse(() -> parseType(), "Expected array index expression.")
+            tryParse(parseType(), "Expected array index expression.")
         );
     }
 
@@ -609,8 +620,7 @@ public class Parser {
         return expr;
     }
 
-    private <T> T tryParse(Supplier<T> supplier, String error) {
-        final T node =  supplier.get();
+    private <T> T tryParse(T node, String error) {
         if (node == null) {
             throw error(error);
         }
@@ -621,7 +631,7 @@ public class Parser {
 // MARK: NodeScope
 class NodeScope {
     final List<NodeStmt> statements;
-    NodeScope(List<NodeStmt> s) { statements = List.copyOf(s); }
+    NodeScope(List<NodeStmt> s) { statements = s; }
     public String toString() {
         return "{" + String.join("; ", 
             statements.stream()
@@ -633,7 +643,7 @@ class NodeScope {
 
 // MARK: NodeStatement
 enum AssignOp { 
-    AddEqual, SubEqual, 
+    AssignEqual, AddEqual, SubEqual, 
     MultiplyEqual, DivideEqual, ModEqual, 
     AndEqual, OrEqual 
 }
@@ -654,10 +664,10 @@ abstract class NodeStmt {
     }
 
     static class ForEach extends NodeStmt {
-        final NodeVar itr, list; final NodeScope scope; 
+        final NodeVar itr; final NodeTerm list; final NodeScope scope; 
         public Object host(Visitor v) { return v.visit(this); }
         public String toString() { return String.format("for (%s in %s) %s", itr, list, scope); } 
-        ForEach(NodeVar i, NodeVar l, NodeScope s) { itr = i; list = l; scope = s; }
+        ForEach(NodeVar i, NodeTerm l, NodeScope s) { itr = i; list = l; scope = s; }
     }
 
     static class For extends NodeStmt {
@@ -686,13 +696,6 @@ abstract class NodeStmt {
         public Object host(Visitor v) { return v.visit(this); }
         public String toString() { return String.format("%s %s %s", term, op, expr); }
         Assign(AssignOp o, NodeTerm q, NodeExpr e) { op = o; term = q; expr = e; }
-    }
-    
-    static class PropAssign extends NodeStmt {
-        final NodeVar var, prop; final NodeExpr expr;
-        public Object host(Visitor v) { return v.visit(this); }
-        public String toString() { return String.format("%s.%s = %s", var, prop, expr); }
-        PropAssign(NodeVar q, NodeVar m, NodeExpr e) { var = q; expr = e; prop = m; }
     }
 
     static class Expr extends NodeStmt {
@@ -742,7 +745,6 @@ abstract class NodeStmt {
     abstract Object host(Visitor visitor);
     interface Visitor {
         Object visit(Assign assignment);
-        Object visit(PropAssign assignment);
         Object visit(Declare declaration);
         Object visit(Expr expression);
         Object visit(If statement);
@@ -783,10 +785,10 @@ enum BinaryOp {
 abstract class NodeExpr {
     public int lineNumber = 0;
     static class Binary extends NodeExpr {
-        final NodeExpr lhs, rhs; final BinaryOp op;
+        final NodeTerm lhs, rhs; final BinaryOp op;
         public <R> R host(Visitor<R> v) { return v.visit(this); }
         public String toString() { return String.format("%s %s %s", lhs, op, rhs); }
-        Binary(BinaryOp o, NodeExpr l, NodeExpr r) { op = o; lhs = l; rhs = r; }
+        Binary(BinaryOp o, NodeTerm l, NodeTerm r) { op = o; lhs = l; rhs = r; }
     }
     
     static class Term extends NodeExpr {

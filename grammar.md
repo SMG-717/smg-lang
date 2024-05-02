@@ -23,14 +23,14 @@ Definition  -> [Decl] | [Func] | [Return]
 Comment     -> '#' (_Anything_)* '\n'
 
 # Statements
-Assign      -> ([Variable] | [ArrayAccess] | [Accessor]) [AssignOp] [Expr]
-Decl        -> 'let' [Variable] '=' [Expr]
+Assign      -> ([Qualifier] | [ArrayAccess] | [Accessor]) [AssignOp] [Expr]
+Decl        -> 'let' [Qualifier] '=' [Expr]
 If          -> 'if' [Expr] [Scope] ('else if' [Expr] [Scope])* ('else' [Scope])?
 Try         -> 'try' [Scope] ('catch' [Qualifier] [Scope])? ('finally' [Scope])?
 While       -> 'while' [Expr] [Scope]
 ForEach     -> 'for' '(' [Qualifier] 'in' [Term] ')' [Scope]
 ForLoop     -> 'for' '(' ([Assign] | [Decl])? ';' [Expr]? ';' ([Assign] | [Expr])? ')' [Scope]
-Func        -> 'define' [Variable] '(' ([Param] (',' [Param])*)? ')' [Scope]
+Func        -> 'define' [Qualifier] '(' (([Param]) (',' ([Param]))*)? ')' [Scope]
 Expr        -> [Term] ([BinaryOp] [Term])?
 Return      -> 'return' [Expr]?
 Break       -> 'break'
@@ -41,18 +41,16 @@ Term        -> '(' [Expr] ')' | [ArrayLit] | [MapLit] | [UnaryExpr] | [ArrayAcce
     [Qualifier] | [Accessor] | [Literal] | [FCall] | [Cast]
 UnaryExpr   -> [UnaryOp] [Term]
 Accessor    -> [Term] '.' [Qualifier]
-FCall       -> [Term] '(' [ExprList]? ')'
+FCall       -> [Term] '(' ([Expr] (',' [Expr])*)? ')'
 Cast        -> [Term] 'as' [Type]
 
 # Maps and Arrays
 ArrayAccess -> [Term] '[' [Expr] ']'
-ExprList    -> [Expr] (',' [Expr])*
-Param       -> [Variable] ('=' [Expr])
-KVList      -> [Qualifier] ':' [Expr] (',' [Qualifier] ':' [Expr])*
-MapLit      -> '{' [KVList]? '}'
-ArrayLit    -> '[' [ExprList]? ']'
+Param       -> [Qualifier] ('=' [Expr])?
+MapLit      -> '{' ([Qualifier] ':' [Expr] (',' [Qualifier] ':' [Expr])*)? '}'
+ArrayLit    -> '[' ([Expr] (',' [Expr])*)? ']'
 
-# Variable
+# Qualifier
 Qualifier   -> ([Letter] | [Underscore]) ([Letter] | [Underscore] | [Digit])* 
 Letter      -> [A-Za-z]
 Underscore  -> '_'
@@ -67,6 +65,7 @@ Integer     -> [Digit]+
 Digit       -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
 Type        -> 'int' | 'long' | 'double' | 'float' | 'char' | 'string' | 'boolean'
 
+# Operators
 AssignOp    -> '=' | '^=' | '*=' | '/=' | '%=' | '+=' | '-=' | '&=' | '|='
 UnaryOp     -> '-' | '~' | '!' | 'not'
 BinaryOp    -> '^' | '*' | '/' | '%' | '+' | '-' | '<<' | '>>' | 

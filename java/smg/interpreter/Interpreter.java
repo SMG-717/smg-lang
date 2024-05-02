@@ -1,40 +1,23 @@
 package smg.interpreter;
 
-import java.math.BigDecimal;
-import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class Interpreter {
 
-    /**
-     * Parser for a small custom language.
-     * 
-     * The process is split into three interleaving parts, namely:
-     *   - Tokeniser
-     *   - Parser
-     *   - Interpreter
-     * 
-     * Although the Tokeniser is independent from the Parser, it works with the
-     * latter in tandem to minimise space and resources used.
-     */
-
-
     private final LinkedList<Map<String, Object>> scopes;
     private final Parser parser;
-    private int lineNumber = 0;
+    private int line = 0;
     private Object lastResult;
-    private MemberAccessor<Object, String, Object> memberAccessCallback;
-    private MemberUpdater<Object, String, Object> memberUpdateCallback;
+    private MemberAccessor<Object, String, Object> maccess;
+    private MemberUpdater<Object, String, Object> mupdate;
+    private JumpOperation jump = null;
 
     public Interpreter(String input) {
         this(input, new HashMap<>(), null, null);
@@ -52,34 +35,48 @@ public class Interpreter {
     ) {
         this.parser = new Parser(input);
         this.scopes = new LinkedList<>(List.of(new HashMap<>(variables)));
-        this.memberAccessCallback = maccess;
-        this.memberUpdateCallback = mupdate;
+        this.maccess = maccess;
+        this.mupdate = mupdate;
     }
 
-    /**
-     * Variable management.
-     * 
-     * Crucial for the execution of the interpreter when variables are involved.
-     */
-    public Interpreter addVariable(String key, Object value) {
-        findVariable(key).orElse(scopes.getLast()).put(key, value);
-        return this;
-    }
-
+    // MARK: Variables and Scopes
     public Map<String, Object> getGlobalScopeVariables() {
         return scopes.getFirst();
     }
 
+    public Interpreter addVar(String key, Object value) {
+        return addVar(key, value, false);
+    }
+
+    public Interpreter addVar(String key, Object value, boolean shadow) {
+        if (shadow) {
+            scopes.getLast().put(key, value);
+        }
+        else {
+            findVar(key).orElse(scopes.getLast()).put(key, value);
+        }
+        return this;
+    }
+
     @SuppressWarnings("unchecked")
-    public <T> T getVariable(String key) {
-        return (T) findVariable(key).orElseThrow(() -> error("Variable " + key + " is undefined")).get(key);
+    public <T> T getVar(String key) {
+        return (T) findVar(key).orElseThrow(() -> error("Variable " + key + " is undefined")).get(key);
+    }
+
+    public boolean defined(String key, boolean allowShadow) {
+        if (allowShadow) {
+            return scopes.getLast().containsKey(key);
+        }
+        else {
+            return findVar(key).isPresent();
+        }
     }
 
     public boolean defined(String key) {
-        return findVariable(key).isPresent();
+        return defined(key, false);
     }
 
-    public Optional<Map<String, Object>> findVariable(String key) {
+    public Optional<Map<String, Object>> findVar(String key) {
         Iterator<Map<String, Object>> itr = scopes.descendingIterator();
         while (itr.hasNext()) {
             final Map<String, Object> scope = itr.next();
@@ -91,10 +88,6 @@ public class Interpreter {
         return Optional.empty();
     }
 
-    public Object getLastResult() {
-        return lastResult;
-    }
-
     private void enterScope() {
         scopes.add(new HashMap<>());
     }
@@ -103,375 +96,625 @@ public class Interpreter {
         scopes.removeLast();
     }
 
-    public Interpreter clearVariables() {
+    public Interpreter clearVars() {
         scopes.clear();
         return this;
+    }
+
+    // MARK: Helpers
+    public Object getLastResult() {
+        return lastResult;
     }
 
     public String getTree() {
         return parser.getRoot() != null ? parser.getRoot().toString() : null;
     }
 
-    public void setMemberAccessCallback(MemberAccessor<Object, String, Object> callback) {
-        memberAccessCallback = callback;
+    public void setMaccess(MemberAccessor<Object, String, Object> callback) {
+        maccess = callback;
     }
 
-    public void setMemberUpdateCallback(MemberUpdater<Object, String, Object> callback) {
-        memberUpdateCallback = callback;
+    public void setMupdate(MemberUpdater<Object, String, Object> callback) {
+        mupdate = callback;
     }
 
     private RuntimeException error(String message) {
-        return new RuntimeException(message + " (line: " + lineNumber + ")");
+        return new RuntimeException(message + " (line: " + line + ")");
     }
     
     private RuntimeException error(Exception exception, String details) {
         final RuntimeException e = new RuntimeException(exception.getMessage() +
-            " (line: " + lineNumber + ")" + 
+            " (line: " + line + ")" + 
             (details != null ? "\n" + details : "")
             );
         e.addSuppressed(exception);
         return e;
     }
     
-    /***************************************************************************
-     * Interpreter
-     * 
-     * Traverses the Syntax Tree in in-order fashion. Calls the parser if no root
-     * node can be found.
-     **************************************************************************/
+    // MARK: Run Scope
     public Object interpret() {
         if (parser.getRoot() == null)
             parser.parse();
-        return lastResult = interpretGlobalScope(parser.getRoot());
+        return lastResult = runScope(parser.getRoot(), true);
     }
     
-    public Object interpretGlobalScope(NodeScope scope) {
-        return interpretScope(scope, true);
-    }
-
-    public Object interpretScope(NodeScope scope) {
-        return interpretScope(scope, false);
-    }
-
-    public Object interpretScope(NodeScope scope, boolean global) {
+    private Object runScope(NodeScope scope) { return runScope(scope, false); }
+    private Object runScope(NodeScope scope, boolean global) {
 
         if (!global) enterScope();
         Object output = null;
         for (NodeStmt statement : scope.statements) {
-            output = interpretStatement(statement);
+            output = runStmt(statement);
+            
+            if (jump != null) break;
         }
         if (!global) exitScope();
 
         return output;
     }
 
-    private final NodeStmt.Visitor statementVisitor = new NodeStmt.Visitor() {
-        public Object visit(NodeStmt.Assign assignment) {
-            // Uncomment this if you do not want to allow users to use undeclared variables
-            // However, it doesn't make much sense to have this on without typing.
-            // if (!defined(assignment.qualifier.name)) {
-            //     throw error("Assignment to an undefined variable: " + assignment.qualifier.name);
-            // }
-
-            final Object value = interpretExpression(assignment.expr);
-            addVariable(assignment.var.name, value);
-            return value;
+    // MARK: Run Statement
+    private Object runStmt(NodeStmt s) {return s == null ? null : s.host(stmtVisitor); }
+    private final NodeStmt.Visitor stmtVisitor = new NodeStmt.Visitor() {
+        
+        public Object visit(NodeStmt.Scope scope) {
+            return runScope(scope.scope);
         }
 
-        public Object visit(NodeStmt.PropAssign assignment) {
-            
-            if (memberUpdateCallback == null) {
-                throw error("Member updater callback not defined.");
+        @SuppressWarnings("unchecked")
+        public Object visit(NodeStmt.Assign assign) {
+            final Object lhs, value;
+            if (assign.term instanceof NodeTerm.Variable) {
+                lhs = getVar(((NodeTerm.Variable) assign.term).var.name);
+                value = calcAssign(assign.op, lhs, runExpr(assign.expr));
+                addVar(((NodeTerm.Variable) assign.term).var.name, value);
             }
+            else {
+                // Find the parent object from the left hand side
+                final Object parent, prop, rhs;
+                if (assign.term instanceof NodeTerm.ArrayAccess) {
+                    final NodeTerm.ArrayAccess t = (NodeTerm.ArrayAccess) assign.term;
+                    parent = runTerm(t.array); prop = runExpr(t.index);
+                }
+                else if (assign.term instanceof NodeTerm.PropAccess) {
+                    final NodeTerm.PropAccess t = (NodeTerm.PropAccess) assign.term;
+                    parent = runTerm(t.object); prop = t.prop.name;
+                }
+                else throw error("LHS of an assignment must be an array or property access, or a variable");
 
-            final Object value = interpretExpression(assignment.expr);
+                // Evaluate the LHS term using the property accessor
+                if (prop instanceof Integer && parent instanceof List) {
+                    lhs = ((List<?>) parent).get((Integer) prop);
+                }
+                else if (prop instanceof String) {
+                    lhs = accessProperty(parent, (String) prop);
+                }
+                else throw error("Invalid property or array accessor: " + prop);
 
-            try {
-                memberUpdateCallback.consume((getVariable(assignment.var.name)), assignment.prop.name, value);
+                // Evaluate the RHS and the final value for assignment
+                rhs = runExpr(assign.expr);
+                value = calcAssign(assign.op, lhs, rhs);
+                
+                if (prop instanceof Integer && parent instanceof List) {
+                   ((List<Object>) parent).set((Integer) prop, value);
+                }
+                else if (prop instanceof String && parent instanceof Map) {
+                    ((Map<String, Object>) parent).put((String) prop, value);
+                }
+                else if (prop instanceof String && mupdate != null) {
+                    mupdate.consume(parent, (String) prop, value);
+                }
+                else {
+                    throw error(String.format("Cannot update property %s of %s (type: %s)", prop, parent, parent.getClass().getSimpleName()));
+                }
             }
-            catch (Exception e) {
-                throw error(e, 
-                    "Additional Details: " + 
-                    "Object: " + assignment.var.name + ", " + 
-                    "Member: " + assignment.prop.name + ", " + 
-                    "Value " + value
-                );
-            }
-            return null;
-        }
-
-        public Object visit(NodeStmt.Declare declaration) {
-
-            if (defined(declaration.var.name)) {
-                throw error("Redefining an existing variable: " + declaration.var.name);
-            }
-            
-            final Object value = interpretExpression(declaration.expr);
-            addVariable(declaration.var.name, value);
             return value;
         }
 
         public Object visit(NodeStmt.Expr expression) {
-            return interpretExpression(expression.expr);
+            return runExpr(expression.expr);
         }
 
-        public Object visit(NodeStmt.If ifStmt) {
-            if ((Boolean) interpretExpression(ifStmt.expr)) {
-                return interpretScope(ifStmt.succ);
+        public Object visit(NodeStmt.Declare declaration) {
+            if (defined(declaration.var.name, true)) {
+                throw error("Redefining an existing variable: " + declaration.var.name);
             }
-            else if (ifStmt.fail != null) {
-                return interpretScope(ifStmt.fail);
+            
+            final Object value = runExpr(declaration.expr);
+            addVar(declaration.var.name, value, true);
+            return value;
+        }
+
+        public Object visit(NodeStmt.If stmt) {
+            if ((Boolean) castValue("boolean", runExpr(stmt.expr))) return runScope(stmt.succ);
+            else if (stmt.fail != null) return runScope(stmt.fail);
+            else return null;
+        }
+
+        public Object visit(NodeStmt.TryCatch block) {
+            Object value = null;
+            try {
+                value = runScope(block._try);
             }
-            else {
-                return null;
+            catch (Exception e) {
+                if (block._catch == null ) throw e;
+
+                enterScope();
+                addVar(block.err.name, e, true);
+                value = runScope(block._catch);
+                exitScope();
             }
+            finally {
+                if (block._finally != null ) runScope(block._finally);
+            }
+
+            return value;
         }
         
-        public Object visit(NodeStmt.While whileStmt) {
-            while ((Boolean) interpretExpression(whileStmt.expr)) {
-                interpretScope(whileStmt.scope);
+        public Object visit(NodeStmt.While loop) {
+            Object value = null;
+            while ((Boolean) runExpr(loop.expr)) {
+                value = runScope(loop.scope);
+                if (jump == JumpOperation.RETURN) break;
+                else if (jump == JumpOperation.CONTINUE) { jump = null; continue; }
+                else if (jump == JumpOperation.BREAK) { jump = null; break; }
             }
-            return null;
-        }
-        
-        public Object visit(NodeStmt.Scope scope) {
-            return interpretScope(scope.scope);
+            return value;
         }
 
         public Object visit(NodeStmt.ForEach loop) {
-            final List<?> list = getVariable(loop.list.name);
+            final List<?> list = (List<?>) runTerm(loop.list);
             enterScope();
+            Object value = null;
             for (Object object : list) {
-                addVariable(loop.itr.name, object);
-                interpretScope(loop.scope);
+                addVar(loop.itr.name, object, true);
+                value = runScope(loop.scope);
+                if (jump == JumpOperation.RETURN) break;
+                else if (jump == JumpOperation.CONTINUE) { jump = null; continue; }
+                else if (jump == JumpOperation.BREAK) { jump = null; break; }
             }
             exitScope();
-            return null;
+            return value;
         }
 
         public Object visit(NodeStmt.For loop) {
             enterScope();
-            for (interpretStatement(loop.init); (Boolean) interpretExpression(loop.cond); interpretStatement(loop.inc)) {
-                interpretScope(loop.scope);
+            Object value = null;
+            for (runStmt(loop.init); (Boolean) runExpr(loop.cond); runStmt(loop.inc)) {
+                value = runScope(loop.scope);
+
+                if (jump == JumpOperation.RETURN) break;
+                else if (jump == JumpOperation.CONTINUE) { jump = null; continue; }
+                else if (jump == JumpOperation.BREAK) { jump = null; break; }
             }
             exitScope();
+            return value;
+        }
+
+        public Object visit(NodeStmt.Function def) {
+            final F function = (Object... args) -> {
+                enterScope();
+                for (int i = 0; i < def.params.size(); i += 1) {
+                    addVar(def.params.get(i).param.name, 
+                        args[i] != null ? args[i] :
+                        runExpr(def.params.get(i)._default),
+                        true
+                    );
+                }
+
+                final Object value = runScope(def.body);
+                exitScope();
+
+                jump = null; // Clear jump flag
+                return value;
+            };
+
+            addVar(def.var.name, function, true);
+            return function;
+        }
+
+        public Object visit(NodeStmt.Break statement) {
+            jump = JumpOperation.BREAK;
             return null;
         }
-    };
 
-    public Object interpretStatement(NodeStmt statement) {
-        return statement == null ? null : statement.host(statementVisitor);
-    }
-
-    /**
-     * Interpret Boolean Expressrion node.
-     * 
-     * Since all nodes directly, or indirectly extend BExpr, they get redirected here to their respective interpreters.
-     * This interpreter also benefits from Java's inherent evaluation system, where if an expression such as 'true or x'
-     * which would normally produce an error if 'x' cannot be evaluated as a boolean would actually evaluate to true.
-     * This can be beneficial but potentially hard to debug.
-     */
-
-    final NodeExpr.Visitor<Object> nodeExpressionVisitor = new NodeExpr.Visitor<Object>() {
-        @Override
-        public Object visit(NodeExpr.Binary node) {
-
-            final Object left = interpretExpression(node.lhs);
-            // final Object right = interpretExpression(node.rhs);
-            final Object right;
-
-            // Special case: String concatenation
-            if (left instanceof String && node.op == BinaryOp.Add) {
-                return ((String) left).concat(stringValue(right = interpretExpression(node.rhs)));
-            }
-            
-            // Special case: String formatting
-            if (left instanceof String && node.op == BinaryOp.Modulo) {
-                return String.format((String) left, interpretExpression(node.rhs));
-            }
-
-            // Special case: Null check
-            if (node.op == BinaryOp.Equal) {
-                right = interpretExpression(node.rhs);
-
-                if (left == null || right == null) {
-                    return left == right;
-                }
-            }
-            
-            else if (node.op == BinaryOp.NotEqual) {
-                right = interpretExpression(node.rhs);
-
-                if (left == null || right == null) {
-                    return left != right;
-                }
-            }
-
-            else {
-                right = null;
-            }
-
-            final Supplier<Object> rGetter = right != null ? () -> right : () -> interpretExpression(node.rhs);
-
-            switch (node.op) {
-                case Exponent:          return Math.pow(evaluate(left), evaluate(rGetter.get()));
-                case Multiply:          return evaluate(left) * evaluate(rGetter.get());
-                case Divide:            return evaluate(left) / evaluate(rGetter.get());
-                case Modulo:            return evaluate(left) % evaluate(rGetter.get());
-                case Add:               return evaluate(left) + evaluate(rGetter.get());
-                case Subtract:          return evaluate(left) - evaluate(rGetter.get());
-                case Greater:           return evaluate(left) > evaluate(rGetter.get());
-                case GreaterEqual:      return evaluate(left) >= evaluate(rGetter.get());
-                case Less:              return evaluate(left) < evaluate(rGetter.get());
-                case LessEqual:         return evaluate(left) <= evaluate(rGetter.get());
-                case NotEqual:          return evaluate(left) != evaluate(rGetter.get());
-                case Equal:             return evaluate(left) == evaluate(rGetter.get());
-                case BitAnd:            return (Integer) left & (Integer) rGetter.get();
-                case BitOr:             return (Integer) left | (Integer) rGetter.get();
-                case BitXor:            return (Integer) left ^ (Integer) rGetter.get();
-                case ShiftLeft:         return (Integer) left << (Integer) rGetter.get();
-                case ShiftRight:        return (Integer) left >> (Integer) rGetter.get();
-                case And:               return (Boolean) left && (Boolean) rGetter.get();
-                case Or:                return (Boolean) left || (Boolean) rGetter.get();
-                default:
-                    throw error("Unsupported operation: " + node.op);
-            }
+        public Object visit(NodeStmt.Continue statement) {
+            jump = JumpOperation.CONTINUE;
+            return null;
         }
 
-        @Override
-        public Object visit(NodeExpr.Unary node) {
-            switch (node.op) {
-                case Not:               return ! (Boolean) interpretExpression(node.val);
-                case Invert:            return ~ (Integer) interpretExpression(node.val);
-                case Negate:            return - evaluate(interpretExpression(node.val));
-                case Decrement:
-                case Increment:
-                default:
-                    throw error("Unsupported operation: " + node.op);
-
-            }
-        }
-        @Override
-        public Object visit(NodeExpr.Term node) {
-            return interpretTerm(node.val);
+        public Object visit(NodeStmt.Return statement) {
+            final Object value = statement.expr != null ? runExpr(statement.expr) : null;
+            jump = JumpOperation.RETURN;
+            return value;
         }
     };
-
-    private static final SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy"); 
-    private String stringValue(Object o) {
-
-        if (o instanceof Date) {
-            return format.format(o);
-        }
-
-        else if (o instanceof Double) {
-            return NumberFormat.getInstance().format((Double) o);
-        }
-
-        else if (o instanceof BigDecimal) {
-            return NumberFormat.getInstance().format(((BigDecimal) o).doubleValue());
-        }
-
-        return String.valueOf(o);
-    }
-
-    private Object interpretExpression(NodeExpr node) {
-        lineNumber = node.lineNumber;
-        return node.host(nodeExpressionVisitor);
-    }
-
-    /**
-     * Interpret Comparision node.
-     * 
-     * Comparision nodes compare values on both sides of an operator. For a value to be comparable it must first be 
-     * represented as a double.
-     */
     
-    /**
-     * Interpret Term
-     * 
-     * Term is an atomic node and is the terminal node in any syntax tree branch. Terms can be literal values or variables
-     * that can be provided on Parser creation. Terms can be any value of any type, so long as they fit in higher level 
-     * expressions. Qualifier-member nodes will be concatenated with a period "." when grabbed fromn the variable map
-     */
+    private Object calcAssign(AssignOp op, Object lhs, Object rhs) {
+        switch (op) {
+            case AssignEqual: return rhs;
+            case AddEqual: return calcBinary(BinaryOp.Add, lhs, rhs);
+            case SubEqual: return calcBinary(BinaryOp.Subtract, lhs, rhs);
+            case MultiplyEqual: return calcBinary(BinaryOp.Multiply, lhs, rhs);
+            case DivideEqual: return calcBinary(BinaryOp.Divide, lhs, rhs);
+            case ModEqual: return calcBinary(BinaryOp.Modulo, lhs, rhs);
+            case AndEqual: return calcBinary(BinaryOp.And, lhs, rhs);
+            case OrEqual: return calcBinary(BinaryOp.Or, lhs, rhs);
+        }
+        throw error("Unsupported assignment operation: " + op);
+    }
 
+    enum JumpOperation {
+        RETURN, BREAK, CONTINUE;
+    }
+    
+
+    // MARK: Run Expression
+    private Object runExpr(NodeExpr expr) { line = expr.lineNumber; return expr.host(exprVisitor); }
+    private final NodeExpr.Visitor<Object> exprVisitor = new NodeExpr.Visitor<Object>() {
+        public Object visit(NodeExpr.Term node) {
+            return runTerm(node.val);
+        }
+
+        public Object visit(NodeExpr.Binary node) {
+            return calcBinary(node.op, runTerm(node.lhs), runTerm(node.rhs));
+        }
+    };
+
+    private Object calcBinaryDouble(BinaryOp op, double lhs, double rhs) {
+        switch (op) {            
+            case Exponent:          return Math.pow(lhs, rhs);
+            case Multiply:          return lhs * rhs;
+            case Divide:            return lhs / rhs;
+            case Modulo:            return lhs % rhs;
+            case Add:               return lhs + rhs;
+            case Subtract:          return lhs - rhs;
+            case Greater:           return lhs > rhs;
+            case GreaterEqual:      return lhs >= rhs;
+            case Less:              return lhs < rhs;
+            case LessEqual:         return lhs <= rhs;
+            case NotEqual:          return lhs != rhs;
+            case Equal:             return lhs == rhs;
+            default:
+        }
+        throw error(String.format("Invalid double operation %s", op));
+    }
+
+    private Object calcBinaryFloat(BinaryOp op, float lhs, float rhs) {
+        switch (op) {
+            case Exponent:          return Math.pow(lhs, rhs);
+            case Multiply:          return lhs * rhs;
+            case Divide:            return lhs / rhs;
+            case Modulo:            return lhs % rhs;
+            case Add:               return lhs + rhs;
+            case Subtract:          return lhs - rhs;
+            case Greater:           return lhs > rhs;
+            case GreaterEqual:      return lhs >= rhs;
+            case Less:              return lhs < rhs;
+            case LessEqual:         return lhs <= rhs;
+            case NotEqual:          return lhs != rhs;
+            case Equal:             return lhs == rhs;
+            default:
+        }
+        throw error(String.format("Invalid float operation %s", op));
+    }
+
+    private Object calcBinaryLong(BinaryOp op, long lhs, long rhs) {
+        switch (op) {
+            case Exponent:          return Math.pow(lhs, rhs);
+            case Multiply:          return lhs * rhs;
+            case Divide:            return lhs / rhs;
+            case Modulo:            return lhs % rhs;
+            case Add:               return lhs + rhs;
+            case Subtract:          return lhs - rhs;
+            case Greater:           return lhs > rhs;
+            case GreaterEqual:      return lhs >= rhs;
+            case Less:              return lhs < rhs;
+            case LessEqual:         return lhs <= rhs;
+            case NotEqual:          return lhs != rhs;
+            case Equal:             return lhs == rhs;
+            case BitAnd:            return lhs & rhs;
+            case BitOr:             return lhs | rhs;
+            case BitXor:            return lhs ^ rhs;
+            case ShiftLeft:         return lhs << rhs;
+            case ShiftRight:        return lhs >> rhs;
+            default:
+        }
+        throw error(String.format("Invalid long operation %s", op));
+    }
+
+    private Object calcBinaryInteger(BinaryOp op, int lhs, int rhs) {
+        switch (op) {
+            case Exponent:          return Math.pow(lhs, rhs);
+            case Multiply:          return lhs * rhs;
+            case Divide:            return lhs / rhs;
+            case Modulo:            return lhs % rhs;
+            case Add:               return lhs + rhs;
+            case Subtract:          return lhs - rhs;
+            case Greater:           return lhs > rhs;
+            case GreaterEqual:      return lhs >= rhs;
+            case Less:              return lhs < rhs;
+            case LessEqual:         return lhs <= rhs;
+            case NotEqual:          return lhs != rhs;
+            case Equal:             return lhs == rhs;
+            case BitAnd:            return lhs & rhs;
+            case BitOr:             return lhs | rhs;
+            case BitXor:            return lhs ^ rhs;
+            case ShiftLeft:         return lhs << rhs;
+            case ShiftRight:        return lhs >> rhs;
+            default:
+        }
+        throw error(String.format("Invalid integer operation %s", op));
+    }
+
+    // Very useful rsource: https://docs.oracle.com/javase/specs/jls/se7/html/jls-5.html
+    @SuppressWarnings("unchecked")
+    private Object calcBinary(BinaryOp op, Object lhs, Object rhs) {
+        if (lhs instanceof String) {
+            switch (op) {
+                case Add: return ((String) lhs).concat(castValue("string", rhs));
+                case Modulo: return ((String) lhs).formatted(rhs);
+                case Equal: case NotEqual: break;
+                default: throw error("Invalid String binary operation: " + op);
+            }
+        }
+        else if (lhs instanceof List) {
+            switch (op) {
+                case Add: { 
+                    if (rhs instanceof List) ((List<Object>) lhs).addAll((List<Object>) rhs);
+                    else ((List<Object>) lhs).add(rhs);
+
+                    return lhs;
+                }
+                case Equal: case NotEqual: break;
+                default: throw error("Invalid List binary operation: " + op);
+            }
+        }
+        else if (lhs instanceof Map) {
+            switch (op) {
+                case Add: { 
+                    if (rhs instanceof Map) {
+                        ((Map<Object, Object>) lhs).putAll((Map<Object, Object>) rhs);
+                        return lhs;
+                    }
+                }
+                case Equal: case NotEqual: break;
+                default: throw error("Invalid Map binary operation: " + op);
+            }
+        }
+
+        switch (op) {
+            case Equal: return lhs.equals(rhs);
+            case NotEqual: return !lhs.equals(rhs);
+            default:
+        }
+        
+        if (lhs instanceof Double || rhs instanceof Double) {
+            return calcBinaryDouble(op, castValue("double", lhs), castValue("double", rhs));
+        }
+        else if (lhs instanceof Float || rhs instanceof Float) {
+            return calcBinaryFloat(op, castValue("float", lhs), castValue("float", rhs));
+        }
+        else if (lhs instanceof Long || rhs instanceof Long) {
+            return calcBinaryLong(op, castValue("long", lhs), castValue("long", rhs));
+        }
+        else if (lhs instanceof Integer || rhs instanceof Integer) {
+            final Object result = calcBinaryInteger(op, castValue("int", lhs), castValue("int", rhs));
+            
+            if (lhs instanceof Character || rhs instanceof Character) {
+                return castValue("char", result);
+            }
+            else {
+                return result;
+            }
+        }
+        else if (lhs instanceof Boolean && rhs instanceof Boolean) {
+            switch (op) {
+                case And: return (Boolean) lhs && (Boolean) rhs;
+                case Or: return (Boolean) lhs || (Boolean) rhs;
+            
+                default:
+                    break;
+            }
+        }
+
+        throw error(String.format("Invalid operation (%s) %s (%s)", lhs.getClass().getSimpleName(), op, rhs.getClass().getSimpleName()));
+    }
+
+
+    // MARK: Run Term
+    private Object runTerm(NodeTerm term) { return term.host(termVisitor); }
     final NodeTerm.Visitor termVisitor = new NodeTerm.Visitor() {
         public Object visit(NodeTerm.Literal<?> literal) {
             return literal.lit;
         }
 
         public Object visit(NodeTerm.Variable variable) {
-            return getVariable(variable.var.name);
+            return getVar(variable.var.name);
         }
         
-        public Object visit(NodeTerm.PropAccess maccess) {
-            if (memberAccessCallback == null) {
-                throw error("Member access callback not defined.");
-            }
-
-            try {
-                final Object variable = getVariable(maccess.object.name);
-                
-                // Special Case: List Length
-                if (variable instanceof List && Set.of("length", "size").contains(maccess.prop.name.toLowerCase())) {
-                    return ((List<?>) variable).size();
-                }
-
-                return memberAccessCallback.apply(variable, maccess.prop.name);
-            }
-            catch (Exception e) {
-                throw error(e, 
-                    "Additional Details: " + 
-                    "Object: " + maccess.object.name + ", " + 
-                    "Member: " + maccess.prop.name
-                );
-            }
+        public Object visit(NodeTerm.PropAccess paccess) {
+            final Object object = runTerm(paccess.object);
+            return accessProperty(object, paccess.prop.name);
         }
 
-        public Object visit(NodeTerm.ArrayLiteral literal) {            
-            final List<Object> objects = new LinkedList<>(literal.items.stream()
-                .map(expr -> interpretExpression(expr))
-                .collect(Collectors.toList()));
+        public Object visit(NodeTerm.ArrayLiteral arr) {
+            return new ArrayList<>(arr.items.stream().map(e -> runExpr(e)).collect(Collectors.toList()));
+        }
 
-            return objects;
+        public Object visit(NodeTerm.MapLiteral map) {
+            return new HashMap<>(map.items.stream().collect(Collectors.toMap(e -> e.key.name, e -> runExpr(e.value))));
         }
 
         public Object visit(NodeTerm.ArrayAccess access) {
-            @SuppressWarnings("unchecked")
-            final List<Object> array = (List<Object>) getVariable(access.array.name);
-            final Object index = interpretExpression(access.index);
+            final Object object = runTerm(access.array);
+            final Object index = runExpr(access.index);
+            if (index instanceof String) {
+                return accessProperty(object, (String) index);
+            }
+            else if (index instanceof Integer && object instanceof List) {
+                return ((List<?>) object).get((Integer) index);
+            }
+            
+            throw error("Invalid array access: " + access);
+        }
 
-            if (index instanceof Double) {
-                return array.get(((Double) index).intValue());
+        public Object visit(NodeTerm.Expr expr) {
+            return runExpr(expr.expr);
+        }
+
+        public Object visit(NodeTerm.UnaryExpr expr) {
+            return calcUnary(expr.op, runTerm(expr.val));
+        }
+
+        public Object visit(NodeTerm.Call call) {
+            
+            final Object function = runTerm(call.f);
+            if (function instanceof F) {
+                final Object value = ((F) function).apply(call.args.stream().map(a -> runExpr(a)).toArray());
+                return value;
             }
             else {
-                return array.get((Integer) index);
+                ((F0) function).apply(call.args.stream().map(a -> runExpr(a)).toArray());
+                return null;
             }
+        }
+
+        public Object visit(NodeTerm.Cast cast) {
+            final Object value = runTerm(cast.object);
+            return castValue(cast.type.type, value);
         }
     };
 
-    private Object interpretTerm(NodeTerm term) { return term.host(termVisitor); }
-    
-    /**
-     * To Double.
-     * 
-     * For a node to viably exist in an equality, or an arithmetic expression, it must have a numerical representation.
-     * For this reason, all values are converted and cast into double. Strings are hashed before being evaluated. While
-     * it can lead to bizzare results with most inequality operations, it is "good enough" testing if two strings are the 
-     * same. All strings that are equal must have the same hash but not all strings with the same has must be equivalent.
-     * Read the Java Documentation on Strings for more info.
-     */
-    private double evaluate(Object value) {
-        if (value == null) return 0;
-        else if (value instanceof Date) return ((Date) value).getTime();
-        else if (value instanceof Double) return (Double) value;
-        else if (value instanceof BigDecimal) return ((BigDecimal) value).doubleValue();
-        else if (value instanceof Integer) return (Integer) value;
-        else if (value instanceof String) return ((String) value).hashCode();
-        else if (value instanceof Long) return (Long) value;
-        
-        throw error("Atomic expression required to be integer, or integer similar, but is not: " + value);
+    private Object accessProperty(Object object, String prop) {
+        if (object instanceof Map) {
+            return ((Map<?, ?>) object).get(prop);
+        }
+        else if (object instanceof String) {
+            switch (prop.toLowerCase()) {
+                case "size":
+                case "length": return ((String) object).length();
+                case "split": return ((F) (args) -> { return ((String) args[0]).split((String) args[1]); });
+
+                // Add more string properties here!
+            }
+
+            throw error("Invalid String property: " + prop);
+        }
+        else if (object instanceof List) {
+            switch (prop.toLowerCase()) {
+                case "size":
+                case "length": return ((List<?>) object).size();
+                // Add more list properties here!                
+            }
+
+            throw error("Invalid List property: " + prop);
+        }
+
+        if (maccess == null) throw error("Member access not defined.");
+        try {
+            return maccess.apply(object, prop);
+        }
+        catch (Exception e) {
+            throw error(e, String.format("Additional Details - Operation: %s", object, prop));
+        }
     }
+
+    private Object calcUnary(UnaryOp op, Object value) {
+        switch (op) {
+            case Not: return !(Boolean) castValue("boolean", value);
+            case Negate: {
+                if (value instanceof Double) return - (Double) value;
+                else if (value instanceof Integer) return - (Integer) value;
+                else if (value instanceof Float) return - (Float) value;
+                else if (value instanceof Long) return - (Long) value;
+                break;
+            }
+            default:
+        }
+        throw error(String.format("Invalid unary operation '%s' on value of type %s", op, value.getClass().getSimpleName()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> R castValue(String type, Object value) {
+        switch (type) {
+            case "string": return (R) String.valueOf(value);
+            case "int": {
+                if (value == null) return (R) (Integer) 0;
+                else if (value instanceof Integer) return (R) value;
+                else if (value instanceof Boolean) return (R) (Integer) (((Boolean) value) ? 1 : 0);
+                else if (value instanceof Character) return (R) (Integer) (int) ((Character) value).charValue();
+                else if (value instanceof Double) return (R) (Integer) ((Double) value).intValue();
+                else if (value instanceof Float) return (R) (Integer) ((Float) value).intValue();
+                else if (value instanceof Long) return (R) (Integer) ((Long) value).intValue();
+                else if (value instanceof String) return (R) Integer.valueOf((String) value);
+                break;
+            }
+
+            case "long": {
+                if (value == null) return (R) (Long) 0L;
+                else if (value instanceof Long) return (R) value;
+                else if (value instanceof Boolean) return (R) (Long) (((Boolean) value) ? 1L : 0L);
+                else if (value instanceof Integer) return (R) (Long) ((Integer) value).longValue();
+                else if (value instanceof Double) return (R) (Long) ((Double) value).longValue();
+                else if (value instanceof Float) return (R) (Long) ((Float) value).longValue();
+                else if (value instanceof String) return (R) Integer.valueOf((String) value);
+                break;
+            }
+            
+            case "char": {
+                if (value == null) return (R) (Character) '\0';
+                else if (value instanceof Character) return (R) value;
+                else if (value instanceof Boolean) return (R) (Character) (((Boolean) value) ? '1' : '0');
+                else if (value instanceof Integer) return (R) (Character) (char) (int) value;
+                else if (value instanceof Double) return (R) (Character) (char) ((Double) value).intValue();
+                else if (value instanceof Float) return (R) (Character) (char) ((Float) value).intValue();
+                else if (value instanceof String) {
+                    final String s = (String) value;
+                    if (s.length() == 0) return (R) (Character) '\0';
+                    else if (s.length() == 1) return (R) (Character)  s.charAt(0);
+                    throw error("Cannot convert string of length 2 or more into char");
+                }
+                break;
+            }
+
+            case "double": {
+                if (value == null) return (R) (Double) 0.0D;
+                else if (value instanceof Double) return (R) value;
+                else if (value instanceof Boolean) return (R) (Double) (((Boolean) value) ? 1.0D : 0.0D);
+                else if (value instanceof Integer) return (R) (Double) ((Integer) value).doubleValue();
+                else if (value instanceof Long) return (R) (Double) ((Long) value).doubleValue();
+                else if (value instanceof Float) return (R) (Double) ((Float) value).doubleValue();
+                else if (value instanceof String) return (R) Double.valueOf((String) value);
+                break;
+            }
+
+            case "float": {
+                if (value == null) return (R) (Float) 0.0F;
+                else if (value instanceof Float) return (R) value;
+                else if (value instanceof Boolean) return (R) (Float) (((Boolean) value) ? 1.0F : 0.0F);
+                else if (value instanceof Integer) return (R) (Float) ((Integer) value).floatValue();
+                else if (value instanceof Long) return (R) (Float) ((Long) value).floatValue();
+                else if (value instanceof Double) return (R) (Float) ((Double) value).floatValue();
+                else if (value instanceof String) return (R) Float.valueOf((String) value);
+                break;
+            }
+
+            case "boolean": {
+                if (value == null) return (R) (Boolean) false;
+                else if (value instanceof Boolean) return (R) (Boolean) value;
+                else if (value instanceof Integer) return (R) (Boolean) (((Integer) value) != 0);
+                else if (value instanceof Double) return (R) (Boolean) (((Double) value) != 0.0D);
+                else if (value instanceof Float) return (R) (Boolean) (((Float) value) != 0.0F);
+                else if (value instanceof Long) return (R) (Boolean) (((Long) value) != 0L);
+                else if (value instanceof String) return (R) (Boolean) !((String) value).isEmpty();
+                break;
+            }
+        }
+
+        throw error(String.format("Casting from %s to %s is not allowed.", value.getClass().getSimpleName(), type));
+    }
+
 
     @FunctionalInterface
     public interface MemberAccessor<S, M, R> {
@@ -482,5 +725,9 @@ public class Interpreter {
     public interface MemberUpdater<S, M, R> {
         public void consume(S source, M member, R rvalue);
     }
+    
+    @FunctionalInterface
+    public interface F { public Object apply(Object... args); }
+    public interface F0 { public void apply(Object... args); }
 }
 
