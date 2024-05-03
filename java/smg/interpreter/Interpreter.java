@@ -1,6 +1,7 @@
 package smg.interpreter;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -437,12 +438,25 @@ public class Interpreter {
     }
 
     // Very useful rsource: https://docs.oracle.com/javase/specs/jls/se7/html/jls-5.html
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "null" })
     private Object calcBinary(BinaryOp op, Object lhs, Object rhs) {
+        if (lhs == null) {
+            // If both operands are null, always return a null? Not sure if good practice.
+            if (rhs == null) {
+                // Note: ternary operator sgoykld bnot be
+                if (op == BinaryOp.Equal) return true;
+                else if (op == BinaryOp.NotEqual) return false;
+                else return null;
+            };
+            
+            lhs = rhs; 
+            rhs = null;
+        }
+
         if (lhs instanceof String) {
             switch (op) {
                 case Add: return ((String) lhs).concat(castValue("string", rhs));
-                case Modulo: return ((String) lhs).formatted(rhs);
+                case Modulo: String.format((String) lhs, rhs);
                 case Equal: case NotEqual: break;
                 default: throw error("Invalid String binary operation: " + op);
             }
@@ -471,14 +485,65 @@ public class Interpreter {
                 default: throw error("Invalid Map binary operation: " + op);
             }
         }
+        else if (lhs instanceof Date || rhs instanceof Date) {
+
+            boolean switched = false;
+            if (!(lhs instanceof Date)) {
+                Object temp = lhs; lhs = rhs; rhs = temp;
+                switched = true;
+            }
+
+            if (rhs instanceof Date) {
+                final Date dlhs = (Date) lhs, drhs = (Date) rhs; 
+                switch (op) {
+                    case Greater: return dlhs.after(drhs);
+                    case GreaterEqual: return !dlhs.before(drhs);
+                    case Less: return dlhs.before(drhs);
+                    case LessEqual: return !dlhs.after(drhs);
+
+                    case Equal: case NotEqual: break;
+                    default: throw error("Invalid binary date operation: " + op);
+                }
+            }
+            else if (rhs instanceof Long) {
+                final Date dlhs = (Date) lhs; final long drhs = (Long) rhs; 
+                switch (op) {
+                    case Equal: return dlhs.getTime() == drhs;
+                    case NotEqual: return dlhs.getTime() != drhs;
+                    case Greater: return dlhs.getTime() > drhs;
+                    case GreaterEqual: return dlhs.getTime() >= drhs;
+                    case Less: return dlhs.getTime() < drhs;
+                    case LessEqual: return dlhs.getTime() <= drhs;
+                                
+                    default: throw error("Invalid binary date operation: " + op);
+                }
+
+            }
+            else if (rhs instanceof Integer) {
+                final Date dlhs = (Date) lhs; final int drhs = (Integer) rhs; 
+                switch (op) {
+                    case Equal: return dlhs.getTime() == drhs;
+                    case NotEqual: return dlhs.getTime() != drhs;
+                    case Greater: return dlhs.getTime() > drhs;
+                    case GreaterEqual: return dlhs.getTime() >= drhs;
+                    case Less: return dlhs.getTime() < drhs;
+                    case LessEqual: return dlhs.getTime() <= drhs;
+                                
+                    default: throw error("Invalid binary date operation: " + op);
+                }
+            }
+
+            if (switched) {
+                Object temp = lhs; lhs = rhs; rhs = temp;
+            }
+        }
         
         switch (op) {
-            case Equal: return lhs == null ? lhs == rhs : lhs.equals(rhs);
-            case NotEqual: return lhs == null ? lhs != rhs : !lhs.equals(rhs);
+            case Equal: return lhs.equals(rhs);
+            case NotEqual: return !lhs.equals(rhs);
             default:
         }
 
-        
         if (lhs instanceof Double || rhs instanceof Double) {
             return calcBinaryDouble(op, castValue("double", lhs), castValue("double", rhs));
         }
@@ -635,6 +700,7 @@ public class Interpreter {
             case "int": {
                 if (value == null) return (R) (Integer) 0;
                 else if (value instanceof Integer) return (R) value;
+                else if (value instanceof Date) return (R) (Integer) (int) ((Date) value).getTime();
                 else if (value instanceof Boolean) return (R) (Integer) (((Boolean) value) ? 1 : 0);
                 else if (value instanceof Character) return (R) (Integer) (int) ((Character) value).charValue();
                 else if (value instanceof Double) return (R) (Integer) ((Double) value).intValue();
@@ -647,6 +713,7 @@ public class Interpreter {
             case "long": {
                 if (value == null) return (R) (Long) 0L;
                 else if (value instanceof Long) return (R) value;
+                else if (value instanceof Date) return (R) (Long) ((Date) value).getTime();
                 else if (value instanceof Boolean) return (R) (Long) (((Boolean) value) ? 1L : 0L);
                 else if (value instanceof Integer) return (R) (Long) ((Integer) value).longValue();
                 else if (value instanceof Double) return (R) (Long) ((Double) value).longValue();

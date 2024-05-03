@@ -15,8 +15,12 @@ public class Main {
             System.out.print(arg[0]);
             for (int i = 1; i < arg.length; i += 1) System.out.print(" " + arg[i]);
         });
-
-        final Object result = intr.interpret();
-        System.out.println(result == null ? "" : result);
+        try {
+            final Object result = intr.interpret();
+            System.out.println(result == null ? "" : result);
+        }
+        catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
     }
 }
