@@ -1,44 +1,54 @@
-#### Statements
-# Declaration
+# SMG Test Code!
+# Run this whenever a change is made to any part of the Interpreter.
+# Make sure to give the instance a definition for print and println!
+try { print() } catch (e) { "print() is not defined! Aborting."; break; }
+try { println() } catch (e) { "println() is not defined! Aborting."; break; }
+
+# Declarations
 let x = 1
 let y
 
-println("x", x)
-println("y", y)
+print("Declaration Test -> ")
+println("x =", x, "y =", y)
 
 # If Statement
+print("If Statement Test -> ")
 let item = 7
 if (item > 5) { 
-    println(">5: ", item) 
+    println(item, "> 5") 
 }
 else if (item > 1) {
-    println(">1: ", item) 
+    println(item, "> 1") 
 }
 else if (item) { 
-    println("=1: ", item) 
+    println(item, "= 1") 
 }
 else { 
-    println("=0: ", item) 
+    println(item, "= 0") 
 }
 
 # While Loops
+print("While Loop Test -> ")
 let i = 0
 let names = ["Saif", "Kyle", "Joseph"]
 while (i < names.size) {
-    println("%d." % (i + 1), names[i])
+    print("%d." % (i + 1), names[i], "")
     i += 1
 }
+println()
 
 # For Loop
+print("For Each Loop Test -> ")
 let alpha = 'A' as char
 for (name in names) {
-    println("%s." % alpha, name)
+    print("%s." % alpha, name, "")
     alpha += 1
 }
+println()
 
 # Jump Statements
 # All of the following should output '0 1 3 4'
-print("For Test -> ")
+print("For Loop Test (with jumps) -> ")
 for (let j = 0; j < 10; j += 1) {
     if (j == 2) { 
         continue 
@@ -48,17 +58,17 @@ for (let j = 0; j < 10; j += 1) {
     }
     print(j,"")
 }
-
 println()
-print("For Each Test -> ")
+
+print("For Each Loop Test (with jumps) -> ")
 for (j in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     if (j == 2) { continue }
     else if (j == 5) { break }
     print(j,"")
 }
-
 println()
-print("While Test -> ")
+
+print("While Loop Test (with jumps) -> ")
 let j = 0
 while (j < 10) {
     if (j == 2) { j += 1; continue; }
@@ -66,7 +76,10 @@ while (j < 10) {
     print(j,"")
     j += 1
 }
+println()
 
+# Functions
+print("Fibonacci Function Test -> ")
 function fibonacci(n) {
     let a = 0; let b = 1; let c = 0;
     let max = 50
@@ -80,39 +93,104 @@ function fibonacci(n) {
     print("OH NO!!")
 }
 
-println()
-print("Fibonacci Test -> ")
 for (let i = 0; i < 10; i += 1) {
     print(fibonacci(i),"")
 }
+println()
 
-# Functions
-function multiplier(m) {
-    function mult(x) { 
-        return x * m 
+print("Iterator Function Test -> ")
+function iterate(list) {
+    let i = {idx: 0}
+    return {
+        next: function() {
+            if (i.idx < list.size) {
+                let temp = list[i.idx]
+                i.idx += 1
+                return temp
+            }
+            else {
+                return null
+            }
+        },
+        hasNext: function() (i.idx < list.size)
     }
-    return mult
 }
 
-let tripler = multiplier(3)
-println()
-for (i in [1, 2, 3]) {
-    print(tripler(i), "")
+let itr = iterate([5, 7, 2, 8])
+let n;
+while (itr.hasNext()) {
+    n = itr.next();
+    print(n, "")
 }
-
 println()
-println("5 * 6 =", multiplier(5)(6))
+
+println("Lambda Tests")
 println("8 * 9 =", (function (a) a * 8)(9))
 println("7 * 4 =", (function (a) {return a * 7})(4))
 
 let woah = function (x) function (y) x * y
-println(woah(12)(13)) # = 156
+println("12 * 13 = ", woah(12)(13)) # = 156
 
-println({ 
-    name: "SMG", 
-    age: 23, 
-    props: { 
-        wealth: "broke", 
-        loves: [ "Yoimiya" ]
-    } 
+let what = function (job = "developer", name = "SMG") ({
+    name: name, job: job
 })
+
+println("Default Argument Tests")
+println("arg ->", what("engineer"))
+println("no arg ->", what())
+
+# Try Catch
+print("Try without catch -> ")
+let success = "pass"
+try {
+    print(1 / 0)
+    success = "fail"
+}
+println(success)
+
+print("Try with catch -> ")
+try {
+    let deep = null ["love"]
+    println("fail")
+}
+catch e {
+    println("success! caught:", e)
+}
+
+print("Try with finally -> ")
+try {
+    let deep = null ["love"]
+    print("fail, ")
+}
+catch (e) {
+    print("caught, ")
+}
+finally {
+    println("finally.")
+}
+
+# Scopes and Shadowing
+println("Scopes and Shadowing Test (Result should be %s, 10, 100, 1000, 1000, 10)" % x)
+print("Result -> %s, " % x)
+{
+    let x = 10; print("%s, " % x)
+    {
+        let x = 100; print("%s, " % x)
+        {
+            x = 1000; print("%s, " % x)
+        }
+        print("%s, " % x)
+    }
+    print("%s" % x)
+}
+println()
+
+
+# Assignments
+print("Assignment Operator Tests -> ")
+let p = function(s) print(s, "")
+let num = 12; p(num); num -= 2; p(num); num += 15; p(num); num /= 5; p(num); num *= 7; p(num); num %= 4; p(num)
+let bool = true; p(bool); bool |= false; p(bool); bool &= false; p(bool)
+
+# We have a little fun
+# println("Print Self:\n " + parser())

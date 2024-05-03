@@ -17,7 +17,7 @@ public class Token {
     final int precedence;
     final boolean rightassoc;
 
-    static final Token Empty = new Token("empty", TokenType.Keyword);
+    static final Token Null = new Token("null", TokenType.Keyword);
     static final Token If = new Token("if", TokenType.Keyword);
     static final Token Else = new Token("else", TokenType.Keyword);
     static final Token While = new Token("while", TokenType.Keyword);

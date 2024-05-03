@@ -208,7 +208,7 @@ public class Tokeniser {
         Token.Continue,
         Token.Function, 
         Token.Else, 
-        Token.Empty, 
+        Token.Null, 
         Token.Finally, 
         Token.False,
         Token.For, 

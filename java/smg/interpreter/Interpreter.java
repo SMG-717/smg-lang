@@ -15,28 +15,15 @@ public class Interpreter {
     private final Parser parser;
     private int line = 0;
     private Object lastResult;
-    private MemberAccessor<Object, String, Object> maccess;
-    private MemberUpdater<Object, String, Object> mupdate;
     private JumpOperation jump = null;
 
     public Interpreter(String input) {
-        this(input, new HashMap<>(), null, null);
+        this(input, new HashMap<>());
     }
     
-    public Interpreter(String input, Map<String, Object> variables) {
-        this(input, variables, null, null);
-    }
-
-    public Interpreter(
-        String input, 
-        Map<String, Object> variables, 
-        MemberAccessor<Object,String,Object> maccess,
-        MemberUpdater<Object,String,Object> mupdate
-    ) {
+    public Interpreter(String input, Map<String, Object> vars) {
         this.parser = new Parser(input);
-        this.scopes = new LinkedList<>(List.of(new HashMap<>(variables)));
-        this.maccess = maccess;
-        this.mupdate = mupdate;
+        this.scopes = new LinkedList<>(List.of(new HashMap<>(vars)));
     }
 
     // MARK: Variables and Scopes
@@ -114,27 +101,10 @@ public class Interpreter {
         return parser.getRoot() != null ? parser.getRoot().toString() : null;
     }
 
-    public void setMaccess(MemberAccessor<Object, String, Object> callback) {
-        maccess = callback;
-    }
-
-    public void setMupdate(MemberUpdater<Object, String, Object> callback) {
-        mupdate = callback;
-    }
-
     private RuntimeException error(String message) {
         return new RuntimeException(message + " (line: " + line + ")");
     }
     
-    private RuntimeException error(Exception exception, String details) {
-        final RuntimeException e = new RuntimeException(exception.getMessage() +
-            " (line: " + line + ")" + 
-            (details != null ? "\n" + details : "")
-            );
-        e.addSuppressed(exception);
-        return e;
-    }
-
     private String javaType(Object object) {
         return object == null ? "null" : object.getClass().getSimpleName();
     }
@@ -143,22 +113,28 @@ public class Interpreter {
     public Object interpret() {
         if (parser.getRoot() == null)
             parser.parse();
-        return lastResult = runScope(parser.getRoot(), true);
+        return lastResult = runProgram(parser.getRoot());
     }
     
-    private Object runScope(NodeScope scope) { return runScope(scope, false); }
-    private Object runScope(NodeScope scope, boolean global) {
+    private Object runProgram(NodeProgram scope) {    
+        return runStatements(scope.statements);
+    }
 
-        if (!global) enterScope();
-        Object output = null;
-        for (NodeStmt statement : scope.statements) {
-            output = runStmt(statement);
+    private Object runScope(NodeScope scope) {    
+        enterScope();
+        Object output = runStatements(scope.statements);
+        exitScope();
+        return output;
+    }
+            
+    private Object runStatements(List<NodeStmt> stmts) {
+        for (NodeStmt statement : stmts) {
+            lastResult = runStmt(statement);
             
             if (jump != null) break;
         }
-        if (!global) exitScope();
 
-        return output;
+        return lastResult;
     }
 
     // MARK: Run Statement
@@ -209,9 +185,6 @@ public class Interpreter {
                 else if (prop instanceof String && parent instanceof Map) {
                     ((Map<String, Object>) parent).put((String) prop, value);
                 }
-                else if (prop instanceof String && mupdate != null) {
-                    mupdate.consume(parent, (String) prop, value);
-                }
                 else {
                     throw error(String.format("Cannot update property %s of %s (type: %s)", prop, parent, javaType(parent)));
                 }
@@ -245,7 +218,7 @@ public class Interpreter {
                 value = runScope(block._try);
             }
             catch (Exception e) {
-                if (block._catch == null ) throw e;
+                if (block._catch == null ) return null;
 
                 enterScope();
                 addVar(block.err.name, e, true);
@@ -307,14 +280,14 @@ public class Interpreter {
             return function;
         }
 
-        public Void visit(NodeStmt.Break statement) {
+        public Object visit(NodeStmt.Break statement) {
             jump = JumpOperation.BREAK;
-            return null;
+            return lastResult;
         }
 
-        public Void visit(NodeStmt.Continue statement) {
+        public Object visit(NodeStmt.Continue statement) {
             jump = JumpOperation.CONTINUE;
-            return null;
+            return lastResult;
         }
 
         public Object visit(NodeStmt.Return statement) {
@@ -360,7 +333,7 @@ public class Interpreter {
                 enterScope();
                 for (int i = 0; i < def.params.size(); i += 1) {
                     addVar(def.params.get(i).param.name, 
-                        args[i] != null ? args[i] :
+                        i < args.length && args[i] != null ? args[i] :
                         runExpr(def.params.get(i)._default),
                         true
                     );
@@ -498,12 +471,13 @@ public class Interpreter {
                 default: throw error("Invalid Map binary operation: " + op);
             }
         }
-
+        
         switch (op) {
-            case Equal: return lhs.equals(rhs);
-            case NotEqual: return !lhs.equals(rhs);
+            case Equal: return lhs == null ? lhs == rhs : lhs.equals(rhs);
+            case NotEqual: return lhs == null ? lhs != rhs : !lhs.equals(rhs);
             default:
         }
+
         
         if (lhs instanceof Double || rhs instanceof Double) {
             return calcBinaryDouble(op, castValue("double", lhs), castValue("double", rhs));
@@ -621,7 +595,6 @@ public class Interpreter {
                 case "size":
                 case "length": return ((String) object).length();
                 case "split": return ((F) (args) -> { return ((String) args[0]).split((String) args[1]); });
-
                 // Add more string properties here!
             }
 
@@ -637,13 +610,7 @@ public class Interpreter {
             throw error("Invalid List property: " + prop);
         }
 
-        if (maccess == null) throw error("Member access not defined.");
-        try {
-            return maccess.apply(object, prop);
-        }
-        catch (Exception e) {
-            throw error(e, String.format("Additional Details - Operation: %s", object, prop));
-        }
+        throw error(String.format("Cannot access property '%s' of %s (type: %s)", prop, object, javaType(object)));
     }
 
     private Object calcUnary(UnaryOp op, Object value) {
@@ -734,24 +701,16 @@ public class Interpreter {
                 else if (value instanceof Float) return (R) (Boolean) (((Float) value) != 0.0F);
                 else if (value instanceof Long) return (R) (Boolean) (((Long) value) != 0L);
                 else if (value instanceof String) return (R) (Boolean) !((String) value).isEmpty();
-                break;
+                else if (value instanceof List) return (R) (Boolean) (((List<?>) value).size() > 0);
+                else if (value instanceof Map) return (R) (Boolean) (((Map<?, ?>) value).size() > 0);
+                
+                return (R) (Boolean) true;
             }
         }
 
         throw error(String.format("Casting from %s to %s is not allowed.", javaType(value), type));
     }
 
-
-    @FunctionalInterface
-    public static interface MemberAccessor<S, M, R> {
-        public R apply(S source, M member);
-    }
-    
-    @FunctionalInterface
-    public static interface MemberUpdater<S, M, R> {
-        public void consume(S source, M member, R rvalue);
-    }
-    
     @FunctionalInterface
     public static interface F { public Object apply(Object... args); }
     
