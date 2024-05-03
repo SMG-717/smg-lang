@@ -297,12 +297,15 @@ public class Parser {
     // MARK: Parse Expression
     private NodeExpr parseExpr() {
         cacheLineNumber();
-        final NodeExpr expr;
+        final NodeExpr expr; final NodeTerm term;
         if (peek() == Token.Function) {
             expr = parseLambda();
         }
+        else if ((term = parseTerm()) != null) {
+            expr = parseExpression(term, 0);
+        }
         else {
-            expr = parseExpression(parseTerm(), 0);
+            return null;
         }
 
         return lineNumerise(expr);
@@ -430,10 +433,13 @@ public class Parser {
         if (tryConsume(Token.CloseSquare)) return arr;
         
         do {
-            arr.items.add(tryParse(parseExpr(), "Expected expression"));
+            final NodeExpr expr = parseExpr();
+            if (expr == null) break;
+
+            arr.items.add(expr);
         } 
         while (tryConsume(Token.Comma));
-
+        skipBlank();
         tryConsume(Token.CloseSquare, "Expected ']'");
         return arr;
     }
@@ -446,7 +452,9 @@ public class Parser {
         if (tryConsume(Token.CloseCurly)) return arr;
         
         do {
-            final NodeVar key = tryParse(parseVariable(), "Expected variable");
+            final NodeVar key = parseVariable();
+            if (key == null) break;
+            
             tryConsume(Token.Colon, "Expected ':");
             final NodeExpr value = tryParse(parseExpr(), "Expected expression");
             arr.items.add(new NodeMapEntry(key, value));
