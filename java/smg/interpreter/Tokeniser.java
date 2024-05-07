@@ -228,7 +228,8 @@ public class Tokeniser {
         Token.Float,
         Token.Character,
         Token.String,
-        Token.Boolean
+        Token.Boolean,
+        Token.Date
     );
 
     private Token getKeyword(String value) {

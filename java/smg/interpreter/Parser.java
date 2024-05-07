@@ -8,8 +8,8 @@ public class Parser {
     
     private final List<Token> cache;
     private final Tokeniser tokeniser;
-    private int line = 1, lineCache = 1;
     private NodeProgram root = null;
+    private int line = 1;
 
     public Parser(Tokeniser t) {
         tokeniser = t;
@@ -37,7 +37,7 @@ public class Parser {
     private NodeScope parseScope() {
         if (!tryConsume(Token.OpenCurly)) return null; 
         
-        final NodeScope scope = new NodeScope(parseProgram().statements);
+        final NodeScope scope = new NodeScope(parseProgram().stmts);
         tryConsume(Token.CloseCurly, "Expected '}'");
         return scope;
     }
@@ -53,7 +53,7 @@ public class Parser {
             // [Statement]?
             NodeStmt stmt;
             if ((stmt = parseStatement()) == null) break;
-            scope.statements.add(stmt);
+            scope.stmts.add(stmt);
         } 
         while (peek() != Token.EOT);
         return scope;
@@ -138,7 +138,7 @@ public class Parser {
         // For Each
         tryConsume(Token.OpenParen, "Expected '('");
         if (peek().isAny(TokenType.Qualifier) && peekNonBlank() == Token.In) {
-            final NodeVar itr; final NodeTerm list;
+            final String itr; final NodeTerm list;
 
             itr = parseVariable();
             tryConsume(Token.In);
@@ -203,10 +203,10 @@ public class Parser {
         if (peek() != Token.Function || !peekNonBlank(1).isAny(TokenType.Qualifier)) return null;
 
         tryConsume(Token.Function);
-        final NodeVar function = parseVariable();
+        final String name = parseVariable();
 
         final List<NodeParam> params = parseParamList();
-        return new NodeStmt.Function(function, params, tryParse(parseScope(), "Expected function body"));
+        return new NodeStmt.Function(name, params, tryParse(parseScope(), "Expected function body"));
     }
 
     // ParamList -> '(' ([Param] (',' [Param])*)? ')'
@@ -225,7 +225,7 @@ public class Parser {
 
     // Param -> [Variable] ('=' [Expr])
     private NodeParam parseParam() {
-        final NodeVar param = parseVariable();
+        final String param = parseVariable();
 
         return param == null ? null : 
             new NodeParam(param, !tryConsume(Token.EqualSign) ? null :
@@ -238,16 +238,16 @@ public class Parser {
         if (!tryConsume(Token.Try)) return null;
 
         final NodeScope tryScope, catchScope, finallyScope;
-        final NodeVar err;
+        final String err;
 
         tryScope = tryParse(parseScope(), "Expected try block.");
         if (tryConsume(Token.Catch)) {
             if (tryConsume(Token.OpenParen)) {
-                err = tryParse(parseVariable(), "Expected error variable");
+                err = parseVariable();
                 tryConsume(Token.CloseParen, "Expected ')'");
             }
             else {
-                err = tryParse(parseVariable(), "Expected error variable");
+                err = parseVariable();
             }
             catchScope = tryParse(parseScope(), "Expected catch block.");
         }
@@ -296,7 +296,6 @@ public class Parser {
 
     // MARK: Parse Expression
     private NodeExpr parseExpr() {
-        cacheLineNumber();
         final NodeExpr expr; final NodeTerm term;
         if (peek() == Token.Function) {
             expr = parseLambda();
@@ -308,12 +307,12 @@ public class Parser {
             return null;
         }
 
-        return lineNumerise(expr);
+        return expr;
     }
 
     private NodeExpr.Lambda parseLambda() {
+        final int currentline = line;
         if (!tryConsume(Token.Function)) return null;
-
         tryConsume(Token.OpenParen, "Expected '('");
         final List<NodeParam> params = new LinkedList<>();
         if (peek() != Token.CloseParen) {
@@ -334,11 +333,12 @@ public class Parser {
             ));
         }
 
-        return new NodeExpr.Lambda(params, lambody);
+        return new NodeExpr.Lambda(params, lambody, currentline);
     }
     
     private NodeExpr parseExpression(NodeTerm left, int prec) {
-        cacheLineNumber();
+        final int currentline = line;
+        
         NodeTerm expr = left;
         while (peek().isAny(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
             final Token op = consume();
@@ -352,7 +352,7 @@ public class Parser {
             expr = new NodeTerm.Expr(arthmeticNode(op, expr, right));
         }
 
-        return lineNumerise(new NodeExpr.Term(expr));
+        return new NodeExpr.Term(expr, currentline);
     }
 
     private NodeExpr.Binary arthmeticNode(Token op, NodeTerm lhs, NodeTerm rhs) {
@@ -375,7 +375,7 @@ public class Parser {
             throw error("Unsupported binary arithmetic operation: " + op);
         }
 
-        return new NodeExpr.Binary(bop, lhs, rhs);
+        return new NodeExpr.Binary(bop, lhs, rhs, line);
     }
 
     
@@ -452,7 +452,7 @@ public class Parser {
         if (tryConsume(Token.CloseCurly)) return arr;
         
         do {
-            final NodeVar key = parseVariable();
+            final String key = parseVariable();
             if (key == null) break;
             
             tryConsume(Token.Colon, "Expected ':");
@@ -537,16 +537,12 @@ public class Parser {
 
     // Term.Variable
     private NodeTerm.Variable parseTermVariable() {
-        final NodeVar var = parseVariable();
+        final String var = parseVariable();
         return var == null ? null : new NodeTerm.Variable(var);
     }
     
-    private NodeVar parseVariable() {
-        if (!peek().isAny(TokenType.Qualifier)) {
-            return null;   
-        }
-        
-        return new NodeVar(consume().value);
+    private String parseVariable() {
+        return peek().isAny(TokenType.Qualifier) ? consume().value : null;
     }
     
     // Term.Literal<?>
@@ -560,7 +556,7 @@ public class Parser {
         else if (peek().isAny(TokenType.NumberLiteral)) {
             final String repr = consume().value;
             try {
-                return new NodeTerm.Literal<Integer>(Integer.parseInt(repr));
+                return new NodeTerm.Literal<Long>(Long.parseLong(repr));
             }
             catch (NumberFormatException e) {
                 return new NodeTerm.Literal<Double>(Double.parseDouble(repr));
@@ -644,17 +640,6 @@ public class Parser {
     private RuntimeException error(String message) {
         return new RuntimeException(message + " (line: " + line + ")");
     }
-    
-    private void cacheLineNumber() {
-        lineCache = line;
-    }
-
-    private NodeExpr lineNumerise(NodeExpr expr) {
-        if (expr != null && expr.lineNumber == 0) {
-            expr.lineNumber = lineCache;
-        }
-        return expr;
-    }
 
     private <T> T tryParse(T node, String error) {
         if (node == null) {
@@ -666,23 +651,23 @@ public class Parser {
 
 // MARK: NodeScope
 class NodeProgram {
-    final List<NodeStmt> statements;
-    NodeProgram(List<NodeStmt> s) { statements = s; }
+    final List<NodeStmt> stmts;
+    NodeProgram(List<NodeStmt> s) { stmts = s; }
     public String toString() {
         return String.join("", 
-            statements.stream()
+            stmts.stream()
             .map(x -> x.toString() + ";\n")
             .collect(Collectors.toList()));
     }
 }
 
 class NodeScope {
-    final List<NodeStmt> statements;
-    NodeScope(List<NodeStmt> s) { statements = s; }
+    final List<NodeStmt> stmts;
+    NodeScope(List<NodeStmt> s) { stmts = s; }
     public String toString() {
         return "{\n" + 
             String.join("", 
-                statements.stream()
+                stmts.stream()
                 .map(x -> x.toString() + ";\n")
                 .collect(Collectors.toList()))
             .indent(2)
@@ -704,7 +689,7 @@ abstract class NodeStmt {
     static class If extends NodeStmt {
         final NodeExpr expr; final NodeScope succ, fail;
         If (NodeExpr e, NodeScope s, NodeScope f) { expr = e; succ = s; fail = f; }
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { 
             return String.format("if (%s) %s", expr, succ, 
                fail == null ? "" : String.format("\nelse %s", fail)
@@ -715,127 +700,127 @@ abstract class NodeStmt {
     static class While extends NodeStmt {
         final NodeExpr expr; final NodeScope scope; 
         While(NodeExpr e, NodeScope s) { expr = e; scope = s; }
-        public <R> R host(Visitor v) { return v.visit(this);  }
+        public void host(Visitor v) { v.visit(this);  }
         public String toString() { return String.format("while (%s) %s", expr, scope); } 
     }
 
     static class ForEach extends NodeStmt {
-        final NodeVar itr; final NodeTerm list; final NodeScope scope; 
-        public <R> R host(Visitor v) { return v.visit(this); }
+        final String itr; final NodeTerm list; final NodeScope scope; 
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return String.format("for (%s in %s) %s", itr, list, scope); } 
-        ForEach(NodeVar i, NodeTerm l, NodeScope s) { itr = i; list = l; scope = s; }
+        ForEach(String i, NodeTerm l, NodeScope s) { itr = i; list = l; scope = s; }
     }
 
     static class For extends NodeStmt {
         final Declare init; final NodeExpr cond; final NodeStmt inc; final NodeScope scope;
-        public <R> R host(Visitor v) {  return v.visit(this);  }
+        public void host(Visitor v) { v.visit(this);  }
         public String toString() { return String.format("for (%s;%s;%s) %s", init, cond, inc, scope); }
         For(Declare d, NodeExpr c, NodeStmt i, NodeScope s) { init = d; cond = c; inc = i; scope = s; }
     }
 
     static class Scope extends NodeStmt {
         final NodeScope scope;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return scope.toString(); } 
         Scope(NodeScope s) { scope = s; }
     }
 
     static class Declare extends NodeStmt {
-        final NodeVar var; final NodeExpr expr;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        final String var; final NodeExpr expr;
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return String.format("let %s = %s", var, expr); } 
-        Declare(NodeVar q, NodeExpr e) { var = q; expr = e; }
+        Declare(String q, NodeExpr e) { var = q; expr = e; }
     }
     
     static class Assign extends NodeStmt {
         final NodeTerm term; final AssignOp op; final NodeExpr expr;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return String.format("%s %s %s", term, op, expr); }
         Assign(AssignOp o, NodeTerm q, NodeExpr e) { op = o; term = q; expr = e; }
     }
 
     static class Expr extends NodeStmt {
         final NodeExpr expr;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return expr.toString(); } 
         Expr(NodeExpr e) { expr = e; }
     }
 
     static class Return extends NodeStmt {
         final NodeExpr expr;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return "return" + (expr == null ? "" : " " + expr);} 
         Return(NodeExpr e) { expr = e; }
     }
     
     static class Break extends NodeStmt {
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return "break"; } 
     }
     
     static class Continue extends NodeStmt {
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { return "continue"; } 
     }
 
     static class Function extends NodeStmt {
-        final NodeVar var;
+        final String name;
         final List<NodeParam> params;
         final NodeScope body;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { 
             return String.format("function %s (%s) %s", 
-                var.name,  
+                name,  
                 String.join(", ", 
                     params.stream()
                     .map(p -> p.toString())
                     .collect(Collectors.toList())), 
                 body); 
         } 
-        Function(NodeVar e, List<NodeParam> a, NodeScope b) { var = e; params = a; body = b; }
+        Function(String e, List<NodeParam> a, NodeScope b) { name = e; params = a; body = b; }
     }
 
     static class TryCatch extends NodeStmt {
         final NodeScope _try, _catch, _finally;
-        final NodeVar err;
-        public <R> R host(Visitor v) { return v.visit(this); }
+        final String err;
+        public void host(Visitor v) { v.visit(this); }
         public String toString() { 
             return String.format("try %s%s%s",
                  _try, 
-                _catch == null ? "" : String.format("\ncatch (%s) %s",
-                    err.name, _catch    
+                _catch == null ? "" : String.format("\ncatch %s%s",
+                    err == null ? "" : String.format("(%s) ", err), _catch    
                 ),
                 _finally == null ? "" : String.format("\nfinally %s", _finally)
             ); 
         } 
-        TryCatch(NodeScope t, NodeScope c, NodeVar e, NodeScope f) { 
+        TryCatch(NodeScope t, NodeScope c, String e, NodeScope f) { 
             err = e; _try = t; _catch = c; _finally = f; 
         }
     }
     
     abstract public String toString();
-    abstract <R> R host(Visitor visitor);
+    abstract void host(Visitor visitor);
     interface Visitor {
-        <R> R visit(Assign assignment);
-        <R> R visit(Declare declaration);
-        <R> R visit(Expr expression);
-        <R> R visit(If statement);
-        <R> R visit(While loop);
-        <R> R visit(For loop);
-        <R> R visit(ForEach loop);
-        <R> R visit(Scope scope);
-        <R> R visit(Break statement);
-        <R> R visit(Continue statement);
-        <R> R visit(Return statement);
-        <R> R visit(Function definition);
-        <R> R visit(TryCatch block);
+        void visit(Assign assignment);
+        void visit(Declare declaration);
+        void visit(Expr expression);
+        void visit(If statement);
+        void visit(While loop);
+        void visit(For loop);
+        void visit(ForEach loop);
+        void visit(Scope scope);
+        void visit(Break statement);
+        void visit(Continue statement);
+        void visit(Return statement);
+        void visit(Function definition);
+        void visit(TryCatch block);
     }
 }
 
 class NodeParam {
-    final NodeVar param; final NodeExpr _default;
-    NodeParam(NodeVar p, NodeExpr e) { param = p; _default = e; }
-    public String toString() { return param.name + (_default == null ? "" : (" = " + _default)); }
+    final String param; final NodeExpr _default;
+    NodeParam(String p, NodeExpr e) { param = p; _default = e; }
+    public String toString() { return param + (_default == null ? "" : (" = " + _default)); }
 }
 
 // MARK: NodeExpression
@@ -855,20 +840,24 @@ enum BinaryOp {
 }
 
 abstract class NodeExpr {
-    public int lineNumber = 0;
-    public static final NodeExpr NULL = new NodeExpr.Term(NodeTerm.NULL);
+    public final int line;
+    private NodeExpr(int ln) { line = ln;}
+
+    public static final NodeExpr NULL = new NodeExpr.Term(NodeTerm.NULL, 0);
     static class Binary extends NodeExpr {
         final NodeTerm lhs, rhs; final BinaryOp op;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return String.format("%s %s %s", lhs, op, rhs); }
-        Binary(BinaryOp o, NodeTerm l, NodeTerm r) { op = o; lhs = l; rhs = r; }
+        Binary(BinaryOp o, NodeTerm l, NodeTerm r, int ln) { 
+            super(ln); op = o; lhs = l; rhs = r; 
+        }
     }
     
     static class Term extends NodeExpr {
         final NodeTerm val;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return val.toString(); } 
-        Term(NodeTerm v) { val = v; }
+        Term(NodeTerm v, int ln) { super(ln); val = v; }
     }
 
     static class Lambda extends NodeExpr {
@@ -883,7 +872,9 @@ abstract class NodeExpr {
                     .collect(Collectors.toList())), 
                 body); 
         } 
-        Lambda(List<NodeParam> a, NodeScope b) { params = a; body = b; }
+        Lambda(List<NodeParam> a, NodeScope b, int ln) { 
+            super(ln); params = a; body = b; 
+        }
     }
 
     abstract public String toString();
@@ -950,17 +941,17 @@ interface NodeTerm {
     }
     
     static class Variable implements NodeTerm {
-        public final NodeVar var;
+        public final String var;
         public <R> R host(Visitor v) { return v.visit(this); }
-        public String toString() { return var.name; } 
-        public Variable(NodeVar v) { this.var = v; }
+        public String toString() { return var; } 
+        public Variable(String v) { this.var = v; }
     }
     
     static class PropAccess implements NodeTerm {
-        final NodeTerm object; final NodeVar prop;
+        final NodeTerm object; final String prop;
         public <R> R host(Visitor visitor) { return visitor.visit(this); }
-        public String toString() { return object.toString() + "." + prop.name; } 
-        public PropAccess(NodeTerm o, NodeVar p) { object = o; prop = p; }
+        public String toString() { return object.toString() + "." + prop; } 
+        public PropAccess(NodeTerm o, String p) { object = o; prop = p; }
     }
 
     static class Literal<T> implements NodeTerm {
@@ -1012,10 +1003,10 @@ interface NodeTerm {
 }
 
 class NodeMapEntry {
-    final NodeVar key; final NodeExpr value;
-    NodeMapEntry(NodeVar p, NodeExpr e) { key = p; value = e; }
+    final String key; final NodeExpr value;
+    NodeMapEntry(String p, NodeExpr e) { key = p; value = e; }
     public String toString() { 
-        return key.name + ": " + String.valueOf(value); 
+        return key + ": " + String.valueOf(value); 
     }
 }
 
@@ -1025,8 +1016,8 @@ class NodeType {
     NodeType(String t) { type = t; }
 }
 
-class NodeVar {
-    final String name;
-    public String toString() { return this.name; }
-    NodeVar(String name) { this.name = name; }
-}
+// class NodeVar {
+//     final String name;
+//     public String toString() { return this.name; }
+//     NodeVar(String name) { this.name = name; }
+// }

@@ -42,6 +42,7 @@ public class Token {
     static final Token Character = new Token("char", TokenType.CastType);
     static final Token String = new Token("string", TokenType.CastType);
     static final Token Boolean = new Token("boolean", TokenType.CastType);
+    static final Token Date = new Token("date", TokenType.CastType);
     
     static final Token Caret = new Token("^", TokenType.BinaryArithmetic, 8, true);
     static final Token Asterisk = new Token("*", TokenType.BinaryArithmetic, 7);
