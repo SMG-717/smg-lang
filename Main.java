@@ -10,13 +10,16 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import smg.interpreter.Interpreter;
+import smg.interpreter.Parser;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
 public class Main {
 
-    public static void main(String[] args) {
-        main2();
+    public static void main(String[] args) throws IOException {
+        final String code = String.join("\n", Files.readAllLines(Paths.get("./code.smg")));
+        final Object program = new Parser(code).parse();
+        System.out.println(program);
     }
 
     public static void main2() {

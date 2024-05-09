@@ -341,7 +341,7 @@ public class Parser {
         
         NodeTerm expr = left;
         while (peek().isAny(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
-            final Token op = consume();
+            final Token op = tryConsume(TokenType.BinaryArithmetic);
             NodeTerm right = parseTerm();
 
             while (peek().isAny(TokenType.BinaryArithmetic) && (
