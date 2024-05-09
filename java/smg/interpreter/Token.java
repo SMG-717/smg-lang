@@ -14,8 +14,8 @@ public class Token {
 
     final String value;
     final Set<TokenType> types;
-    final int precedence;
-    final boolean rightassoc;
+    final int prec;
+    final boolean rassoc;
 
     static final Token Null = new Token("null", TokenType.Keyword);
     static final Token If = new Token("if", TokenType.Keyword);
@@ -126,15 +126,15 @@ public class Token {
     private Token(String val, Set<TokenType> types, int precedence, boolean rightassoc) {
         this.value = val;
         this.types = Set.copyOf(types);
-        this.precedence = precedence;
-        this.rightassoc = rightassoc;
+        this.prec = precedence;
+        this.rassoc = rightassoc;
     }
 
     public boolean hasValue() {
         return !value.isBlank();
     }
 
-    static Token makeToken(String name, TokenType type) {
+    static Token make(String name, TokenType type) {
         return new Token(name, type);
     }
 
@@ -179,13 +179,13 @@ public class Token {
         }
 
         Token token = (Token) other;
-        return this.value.equals(token.value) && this.types.equals(token.types) && this.precedence == token.precedence;
+        return this.value.equals(token.value) && this.types.equals(token.types) && this.prec == token.prec;
     }
 
     @Override
     public int hashCode() {
         // Not sure how collision free this is. -SMG
-        return (this.value.hashCode() + this.types.hashCode()) ^ this.precedence;
+        return (this.value.hashCode() + this.types.hashCode()) ^ this.prec;
     }
 
 }

@@ -13,18 +13,18 @@ public class Tokeniser {
     /***************************************************************************
      * Tokenisation
      * 
-     * The Tokeniser process every character from the input expression individually
-     * and produces tokens based on what it sees and in what order. It keeps no
-     * track of previous tokens or states and blindly moves forward along the 
-     * expression string. Context does not matter to the Tokeniser.
+     * The Tokeniser process every character from the input expression 
+     * individually and produces tokens based on what it sees and in what order. 
+     * It keeps no track of previous tokens or states and blindly moves forward 
+     * along the expression string. Context does not matter to the Tokeniser.
      * 
-     * That being said however, it is aware of the different ways some tokens are
-     * generated from combinations of large amounts of characters. Take for example,
-     * the StringLiteral token type. The Tokeniser reads a single or double quote
-     * character and deduces that all the characters following belong to a string
-     * until a matching quote character is found. Some operators are composed of 
-     * two special characters in a row, and different literals have special ways
-     * of being produced.
+     * That being said however, it is aware of the different ways some tokens 
+     * are generated from combinations of large amounts of characters. Take for 
+     * example, the StringLiteral token type. The Tokeniser reads a single or 
+     * double quote character and deduces that all the characters following 
+     * belong to a string until a matching quote character is found. Some 
+     * operators are composed of two special characters in a row, and different 
+     * literals have special ways of being produced.
      * 
      * All tokens contain a string value and a token type, some tokens have 
      * precedence values. Most tokens are standard ones that can be found in the
@@ -42,16 +42,21 @@ public class Tokeniser {
                 if (state.endsWith("Double") && tryConsume(Token.DoubleQuote)) {
                     final String bufferValue = escape(buffer.toString());
                     buffer.setLength(0);
-                    return Token.makeToken(bufferValue, TokenType.StringLiteral);
+                    return Token.make(bufferValue, TokenType.StringLiteral);
                 }
-                else if (state.endsWith("Single") && tryConsume(Token.SingleQuote)) {
+                else if (
+                    state.endsWith("Single") && 
+                    tryConsume(Token.SingleQuote)
+                ) {
                     final String bufferValue = escape(buffer.toString());
                     buffer.setLength(0);
-                    return Token.makeToken(bufferValue, TokenType.StringLiteral);
+                    return Token.make(bufferValue, TokenType.StringLiteral);
                 }
                 else if (tryConsume(Token.Newline)) {
                     // Forbid multiline strings in source code
-                    throw new RuntimeException("Unexpected new line in string literal");
+                    throw new RuntimeException(
+                        "Unexpected new line in string literal"
+                    );
                 }
                 else {
                     buffer.append(consume());
@@ -62,10 +67,10 @@ public class Tokeniser {
             else if (state == "Comment") {
                 if (tryConsume(Token.Newline)) {
                     buffer.append("\n");
-                    return Token.makeToken(buffer.toString(), TokenType.Comment);
+                    return Token.make(buffer.toString(), TokenType.Comment);
                 }
                 else if (peek() == Token.EOF) {
-                    return Token.makeToken(buffer.toString(), TokenType.Comment);
+                    return Token.make(buffer.toString(), TokenType.Comment);
                 }
                 else {
                     buffer.append(consume());
@@ -73,7 +78,10 @@ public class Tokeniser {
             }
 
             // Building a Qualifier or Keyword
-            else if (peek() == '_' || alpha(peek()) || (alphanum(peek()) && state == "Word")) {
+            else if (
+                peek() == '_' || alpha(peek()) || 
+                (alphanum(peek()) && state == "Word")
+            ) {
                 buffer.append(consume());     
                 state = "Word";
             }
@@ -84,7 +92,10 @@ public class Tokeniser {
             }
 
             // Building a Number Literal
-            else if (numeric(peek()) && (state == "Waiting" || state == "Number")) {
+            else if (
+                numeric(peek()) && 
+                (state == "Waiting" || state == "Number")
+            ) {
                 buffer.append(consume());
                 state = "Number";
             } 
@@ -96,11 +107,12 @@ public class Tokeniser {
             }
 
             else {
-                // If the buffer is full, it means a Keyword or Literal is ready to be tokenised
+                // If the buffer is full, it means a Keyword or Literal is ready
+                // to be tokenised
                 if (buffer.length() > 0) {
                     final String bufferValue = buffer.toString();
                     if (state == "Number" || state == "Decimal") {
-                        return Token.makeToken(bufferValue, TokenType.NumberLiteral);
+                        return Token.make(bufferValue, TokenType.NumberLiteral);
                     }
 
                     else {
@@ -109,7 +121,7 @@ public class Tokeniser {
                             return keyword;
                         }
                         else {
-                            return Token.makeToken(bufferValue, TokenType.Qualifier);
+                            return Token.make(bufferValue, TokenType.Qualifier);
                         }
                     }
                 }
@@ -118,7 +130,8 @@ public class Tokeniser {
                 final Token operator = consumeOperator();
                 if (operator != null) return operator;
 
-                // Otherwise, token could be a single character operator or punctuation token
+                // Otherwise, token could be a single character operator or 
+                // punctuation token
                 final Token singleChar = consumeSingleCharToken();
                 if (singleChar != null) return singleChar;
 
@@ -141,15 +154,15 @@ public class Tokeniser {
                     consume();
                 }
 
-                // Finally, if no token has been returned, the character cannot be identified.
-                // This is likely unreachable.
+                // Finally, if no token has been returned, the character cannot 
+                // be identified. This is in most cases unreachable.
                 else {
                     throw new RuntimeException("Invalid token: " + peek());
                 }
             }
         }
 
-        // No more tokens can be found, and an End of Tokens token will be returned.
+        // No more tokens can be found, and an End of Tokens token is returned.
         return Token.EOT;
     }
 
@@ -167,35 +180,64 @@ public class Tokeniser {
 
     // List of all single character tokens for simplicity.
     private static final List<Token> singles = List.of(
-        Token.Ampersand, Token.Pipe, Token.Tilde, Token.Plus, Token.Hyphen, 
-        Token.Asterisk, Token.ForwardSlash, Token.Percent, Token.Caret, Token.At, 
-        Token.Underscore, Token.Question, Token.Comma, Token.Colon, Token.Newline, 
-        Token.Period, Token.SemiColon, Token.BackSlash, Token.OpenParen, 
-        Token.CloseParen, Token.OpenCurly, Token.CloseCurly, Token.OpenSquare, 
-        Token.CloseSquare, Token.Less, Token.Exclaim, Token.Greater, Token.EqualSign
+        Token.Ampersand, 
+        Token.Pipe, 
+        Token.Tilde, 
+        Token.Plus, 
+        Token.Hyphen, 
+        Token.Asterisk, 
+        Token.ForwardSlash, 
+        Token.Percent, 
+        Token.Caret, 
+        Token.At, 
+        Token.Underscore,
+        Token.Question, 
+        Token.Comma, 
+        Token.Colon, 
+        Token.Newline, 
+        Token.Period, 
+        Token.SemiColon, 
+        Token.BackSlash, 
+        Token.OpenParen, 
+        Token.CloseParen, 
+        Token.OpenCurly, 
+        Token.CloseCurly, 
+        Token.OpenSquare, 
+        Token.CloseSquare, 
+        Token.Less, 
+        Token.Exclaim, 
+        Token.Greater, 
+        Token.EqualSign
     );
 
     private Token consumeSingleCharToken() {
         for (Token t : singles) {
-            if (tryConsume(t)) {
-                return t;
-            }
+            if (tryConsume(t)) return t;
         }
+
         return null;
     }
 
     // List of all operator tokens for simplicity.
     private static final List<Token> operators = List.of(
-        Token.GreaterEqual, Token.LessEqual, Token.Equals, Token.NotEquals, 
-        Token.ShiftLeft, Token.ShiftRight, Token.PlusEqual, Token.MultiplyEqual, 
-        Token.SubtractEqual, Token.DivideEqual, Token.ModEqual, Token.AndEqual, Token.OrEqual
+        Token.GreaterEqual, 
+        Token.LessEqual, 
+        Token.Equals, 
+        Token.NotEquals, 
+        Token.ShiftLeft, 
+        Token.ShiftRight, 
+        Token.PlusEqual, 
+        Token.MultiplyEqual, 
+        Token.SubtractEqual, 
+        Token.DivideEqual, 
+        Token.ModEqual, 
+        Token.AndEqual, 
+        Token.OrEqual
     );
 
     private Token consumeOperator() {
         for (Token t : operators) {
-            if (tryConsume(t)) {
-                return t;
-            }
+            if (tryConsume(t)) return t;
         }
         return null;
     }
@@ -234,10 +276,9 @@ public class Tokeniser {
 
     private Token getKeyword(String value) {
         for (Token t : keywords) {
-            if (t.value.equals(value)) {
-                return t;
-            }
+            if (t.value.equals(value)) return t;
         }
+
         return null;
     }
 
@@ -262,38 +303,33 @@ public class Tokeniser {
      */
     
     private char peek() {
-        return charIndex == expression.length() ? Token.EOF : expression.charAt(charIndex);
+        return charIndex < expression.length() ? expression.charAt(charIndex) :
+            Token.EOF;
     }
 
     private String peekLots(int amount) {
-        return charIndex > expression.length() + amount ? String.valueOf(Token.EOF) : expression.substring(charIndex, charIndex + amount);
+        return charIndex > expression.length() + amount ? 
+            expression.substring(charIndex, charIndex + amount) :
+            String.valueOf(Token.EOF);
     }
 
     private char consume() {
-        return charIndex == expression.length() ? Token.EOF : expression.charAt(charIndex++);
+        return charIndex <= expression.length() ? expression.charAt(charIndex++)
+            : Token.EOF;
     }
 
     private String consumeLots(int amount) {        
-        return charIndex > expression.length() + amount ? String.valueOf(Token.EOF) : expression.substring(charIndex, charIndex += amount);
+        return charIndex <= expression.length() + amount ? 
+            expression.substring(charIndex, charIndex += amount) :
+            String.valueOf(Token.EOF);
     }
     
-    public void reset() {
-        charIndex = 0;
-    }
-
-    public String toString() {
-        return expression;
-    }
+    public void reset() { charIndex = 0; }
+    public String toString() { return expression; }
 
     // Helper character identification functions.
-    private boolean alphanum(Character c) {
-        return alpha(c) || numeric(c);
-    }
-
-    private boolean numeric(Character c) {
-        return (c >= '0' && c <= '9');
-    }
-
+    private boolean alphanum(Character c) { return alpha(c) || numeric(c); }
+    private boolean numeric(Character c) { return (c >= '0' && c <= '9'); }
     private boolean alpha(Character c) {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
     }
