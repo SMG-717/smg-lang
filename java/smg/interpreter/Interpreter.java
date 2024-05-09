@@ -41,9 +41,13 @@ public class Interpreter {
     // for convenience when integrated with Mendix systems.
     private boolean bigDecimalMode = false;
 
-    // Tracks the current line number of execution. This number may not always
-    // be accurate.
+    // Tracks the current line number of execution.
     private int line = 0;
+
+    // When interpretations are chained together, line numbers tend to reset 
+    // between them. An offset can help keep line numbers consistent in error
+    // messages. 
+    private int lineOffset = 0;
 
     // Contstructors
     public Interpreter(String code) { this(code, new HashMap<>()); }
@@ -72,6 +76,10 @@ public class Interpreter {
         if (scopes.getLast().containsKey(key)) 
             throw error("Redefining an existing variable");
         scopes.getLast().put(key, value);
+    }
+
+    public void setOrDefine(String key, Object value) {
+        findVar(key).orElse(scopes.getLast()).put(key, value);
     }
 
     @SuppressWarnings("unchecked")
@@ -106,9 +114,11 @@ public class Interpreter {
 
     // Miscellanea
     public void setBigDecimalMode(boolean on) { bigDecimalMode = on; }
+    public void setLineOffset(int amount) { lineOffset = amount; }
     public Object getLastResult() { return lastResult; }
     public String toString() { return String.valueOf(program); }
-    private String line() { return " (line: " + line + ")"; }
+    public int lineNumber() { return line + lineOffset; }
+    private String line() { return " (line: " + (line + lineOffset) + ")"; }
     RuntimeException error(String message, Object... args) {
         return new RuntimeException(String.format(message + line(), args));
     }
@@ -117,24 +127,17 @@ public class Interpreter {
     public Object run() {
         // Main entry point of execution. Since the program has already been 
         // parsed into a tree, there's little setup for us to do.
-        
-        // 1. Save a copy of global variables and functions for later.
-        final Map<String, Object> inital = new HashMap<>(scopes.getFirst());
 
-        // 2. Add some important standard library functions as variables. Notice
+        // 1. Add some important standard library functions as variables. Notice
         //    that these can be overwritten by users during normal execution.
-        defineVar("exists", (F) a -> defined((String) a[0]));
-        defineVar("global", (F) a -> getGlobals().put((String) a[0], null));
-        defineVar("type", (F) a -> javaType(a[0]));
+        setOrDefine("exists", (F) a -> defined((String) a[0]));
+        setOrDefine("global", (F) a -> getGlobals().put((String) a[0], null));
+        setOrDefine("type", (F) a -> javaType(a[0]));
 
-        // 3. Run the program.
+        // 2. Run the program.
         runProgram();
 
-        // 4. Restore global variables and functions to how they were initially.
-        //    Note that complex objects cannot be restored to normal this way.
-        scopes.set(0, inital);
-
-        // 5. Return the last result evaluated 
+        // 3. Return the last result evaluated 
         return lastResult;
     }
     
@@ -184,8 +187,8 @@ public class Interpreter {
             if (of(index, String.class) && of(parent, Map.class)) {
                 final Map<String, Object> mlhs = (Map<String, Object>) parent;
                 final String i = (String) index;
-    
-                lastResult = calcAssign(intr, a.op, mlhs.get(i), runExpr(a.expr));
+                final Object lhs = mlhs.get(i);
+                lastResult = calcAssign(intr, a.op, lhs, runExpr(a.expr));
                 mlhs.put(i, lastResult);
             }
 
@@ -196,8 +199,8 @@ public class Interpreter {
             else if (of(index, Number.class) && of(parent, List.class)) {
                 final List<Object> llhs = (List<Object>) parent;
                 final int i = ((Number) index).intValue();
-    
-                lastResult = calcAssign(intr, a.op, llhs.get(i), runExpr(a.expr));
+                final Object lhs = llhs.get(i);
+                lastResult = calcAssign(intr, a.op, lhs, runExpr(a.expr));
                 llhs.set(i, lastResult);
             }
             
@@ -210,8 +213,8 @@ public class Interpreter {
                 final String slhs = (String) parent;
                 final int i = ((Number) index).intValue();
     
-                final char newChar = (char) castValue(intr, "char", calcAssign(intr, 
-                    a.op, slhs.charAt(i), runExpr(a.expr)
+                final char newChar = (char) castValue(intr, "char", 
+                    calcAssign(intr, a.op, slhs.charAt(i), runExpr(a.expr)
                 ));
 
                 lastResult = slhs.substring(0, i) + String.valueOf(newChar) +
@@ -244,7 +247,8 @@ public class Interpreter {
             // Grab the value from map and use it to calculate the value of 
             // assignment.
             final Map<String, Object> mlhs = (Map<String, Object>) parent;
-            lastResult = calcAssign(intr, a.op, mlhs.get(term.prop), runExpr(a.expr));
+            final Object lhs = mlhs.get(term.prop);
+            lastResult = calcAssign(intr, a.op, lhs, runExpr(a.expr));
 
             // ... and place this value back into the map.
             mlhs.put(term.prop, lastResult);
@@ -334,12 +338,27 @@ public class Interpreter {
             }
         }
 
+        @SuppressWarnings("unchecked")
         public void visit(NodeStmt.ForEach loop) {
-            final List<?> list = (List<?>) runTerm(loop.list);
+            final Object object = runTerm(loop.list);
+            final Iterator<?> iterator;
+            if (of(object, Iterable.class)) {
+                iterator = ((Iterable<?>) object).iterator();
+            }
+            else if (of(object, Map.class)) {
+                iterator = ((Map<String, Object>) object).keySet().iterator();
+            }
+            else if (of(object, String.class)) {
+                iterator = ((String) object).chars().iterator();
+            }
+            else throw error("Invalid for loop list");
+            
+            // Plot twist!!
+            // For loops are actually while loops in disguise! Muhahaha! 
             enterScope();
             defineVar(loop.itr, null);
-            for (Object object : list) {
-                setVar(loop.itr, object);
+            while (iterator.hasNext()) {
+                setVar(loop.itr, iterator.next());
                 runScope(loop.scope);
                 if (jump == JumpOp.RETURN) break;
                 else if (jump == JumpOp.CONTINUE) { jump = null; continue; }
@@ -386,7 +405,7 @@ public class Interpreter {
     };    
 
     // MARK: Run Expression
-    private Object runExpr(NodeExpr expr) {
+    Object runExpr(NodeExpr expr) {
         if (expr == null) return null;
         line = expr.line; 
         return expr.host(exprVisitor); 
@@ -406,7 +425,11 @@ public class Interpreter {
         }
 
         public Object visit(NodeExpr.Binary node) {
-            return calcBinary(intr, node.op, runTerm(node.lhs), runTerm(node.rhs));
+            return calcBinary(intr, node.op, 
+                node.lhs, node.rhs
+                // runTerm(node.lhs), 
+                // runTerm(node.rhs)
+            );
         }
 
         public Capture visit(NodeExpr.Lambda def) {
@@ -431,7 +454,7 @@ public class Interpreter {
     };
 
     // MARK: Run Term
-    private Object runTerm(NodeTerm term) { return term.host(termVisitor); }
+    Object runTerm(NodeTerm term) { return term.host(termVisitor); }
     private final TermVisitor termVisitor = new TermVisitor(this);
     @SuppressWarnings("unchecked")
     class TermVisitor implements NodeTerm.Visitor {
@@ -474,14 +497,19 @@ public class Interpreter {
                 return accessProp(object, (String) i);
             }
             else if (longish(i) && of(object, List.class)) {
-                return ((List<?>) object).get((int) (long) castValue(intr, "int", i));
+                return ((List<?>) object).get(
+                    (int) (long) castValue(intr, "int", i)
+                );
             }
             else if (longish(i) && of(object, String.class)) {
-                return ((String) object).charAt((int) (long) castValue(intr, "int", i));
+                return ((String) object).charAt(
+                    (int) (long) castValue(intr, "int", i)
+                );
             }
             
             throw error("Invalid array access '%s'. Index is of type %s", 
-                access, javaType(i));
+                access, javaType(i)
+            );
         }
 
         public Object visit(NodeTerm.Expr expr) {

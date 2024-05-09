@@ -647,6 +647,14 @@ public class Parser {
         }
         return node;
     }
+
+    public static String indent(String text, int count) {
+        final String spaces = " ".repeat(count);
+        return String.join("\n", text.lines()
+            .map(l -> spaces + l)
+            .collect(Collectors.toList())
+        );
+    }
 }
 
 // MARK: NodeScope
@@ -666,11 +674,12 @@ class NodeScope {
     NodeScope(List<NodeStmt> s) { stmts = s; }
     public String toString() {
         return "{\n" + 
-            String.join("", 
+            Parser.indent(
+                String.join("", 
                 stmts.stream()
                 .map(x -> x.toString() + ";\n")
-                .collect(Collectors.toList()))
-            .indent(2)
+                .collect(Collectors.toList())),
+            2)
         + "}";
     }
 }
@@ -921,7 +930,14 @@ interface NodeTerm {
             if (items.size() == 0) {
                 return "{}";
             }
-            return "{\n" + String.join(", \n", items.stream().map(e -> e.toString()).collect(Collectors.toList())).indent(2) + "}"; 
+            return "{\n" + 
+                Parser.indent(
+                    String.join(", \n", 
+                    items.stream()
+                    .map(e -> e.toString())
+                    .collect(Collectors.toList())),
+                2)
+            + "}"; 
         } 
         public MapLiteral(List<NodeMapEntry> i) { items = i; }
     }
@@ -1015,9 +1031,3 @@ class NodeType {
     public String toString() { return type; }
     NodeType(String t) { type = t; }
 }
-
-// class NodeVar {
-//     final String name;
-//     public String toString() { return this.name; }
-//     NodeVar(String name) { this.name = name; }
-// }

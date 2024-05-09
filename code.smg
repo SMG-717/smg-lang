@@ -1,246 +1,507 @@
-# SMG Test Code!
-# Run this whenever a change is made to any part of the Interpreter.
-# Make sure to give the instance a definition for print and println!
+# MARK: [[Company: Adetiq]]
+# [[Type: UDC_S1, Count: 4]]
+# [[Rule: Early Exit]]
 
-try { exists("exists") } catch { "exists() is not defined! Aborting."; break; }
-try { type(type) } catch { "type() is not defined! Aborting."; break; }
+let status_fields = ["Case_Details_Status", "Offer_Letter_Status", "Application_Letter_Status", "Statements_Status", "Further_Advance_Status"]
+function setStatuses(status) { for (field in status_fields) { set(Claim, field, status); } }
+function clearSummaries() { for (let i = 1; i <= 5; i += 1) { set(Eval, "Summary_" + i, ""); set(Eval, "Style_" + i, null) } }
+function setSummary(idx, type, msg) { set(Eval, "Style_" + idx, type); set(Eval, "Summary_" + idx, msg) }
+function contains(list, item) { for (e in list) { if (e == item) { return true } } return false }
 
-if (!exists("print")) { "print() is not defined! Aborting."; break; }
-if (!exists("println")) { "println() is not defined! Aborting."; break; } 
+let early_effects = [
+    { message: "Your case has been submitted and currently being audited by our team.", status: "DISABLED", stages: ["RECIEVED", "AUDITED"] },
+    { message: "This claim has been rejected by our audit team.", status: "ERRONEOUS", stages: ["REJECTED"] },
+    { message: "This claim has been accepted by our audit team.", status: "COMPLETE", stages: ["VETTED", "TEMPLATE_FILLING", "FINALISED"] },
+    { message: "The audit team has requested a review of the claim and submit again.", status: "INCOMPLETE", stages: ["REVIEW"] },
+]
 
-# Declarations
-let x = 1
-let y
+for (effect in early_effects) {
+    if contains(effect.stages, get(Claim, "Stage")) {
+        setStatuses(effect.status)
 
-print("Declaration Test -> ")
-println("x =", x, "y =", y)
+        if (UserCompany and get(UserCompany, "Vetting_Role") == "VETTER") {
+            clearSummaries()
+            setSummary(1, effect.status, effect.message)
 
-# If Statement
-print("If Statement Test -> ")
-let item = 7
-if (item > 5) { 
-    println(item, "> 5") 
-}
-else if (item > 1) {
-    println(item, "> 1") 
-}
-else if (item) { 
-    println(item, "= 1") 
-}
-else { 
-    println(item, "= 0") 
-}
-
-# While Loops
-print("While Loop Test -> ")
-let i = 0
-let names = ["Saif", "Kyle", "Joseph"]
-while (i < names.size) {
-    print("%d." % (i + 1), names[i], "")
-    i += 1
-}
-println()
-
-# For Loop
-print("For Each Loop Test -> ")
-let alpha = 'A' as char
-for (name in names) {
-    print("%s." % alpha, name, "")
-    alpha += 1
-}
-println()
-
-# Jump Statements
-# All of the following should output '0 1 3 4'
-print("For Loop Test (with jumps) -> ")
-for (let j = 0; j < 10; j += 1) {
-    if (j == 2) { 
-        continue 
-    }
-    else if (j == integer(5)) { 
-        break 
-    }
-    print(j,"")
-}
-println()
-
-print("For Each Loop Test (with jumps) -> ")
-for (j in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-    if (j == 2) { continue }
-    else if (j == 5) { break }
-    print(j,"")
-}
-println()
-
-print("While Loop Test (with jumps) -> ")
-let j = 0
-while (j < 10) {
-    if (j == 2) { j += 1; continue; }
-    else if (j == 5) { break }
-    print(j,"")
-    j += 1
-}
-println()
-
-# Functions
-print("Fibonacci Function Test -> ")
-function fibonacci(n) {
-    let a = 0; let b = 1; let c = 0;
-    let max = 50
-    while (true) {
-        if (c >= n or c > max) { break }
-        let temp = a + b
-        a = b; b = temp; c += 1
-    }
-
-    return a;
-    print("OH NO!!")
-}
-
-for (let i = 0; i < 10; i += 1) {
-    print(fibonacci(i), "")
-}
-println()
-
-print("Iterator Function Test -> ")
-function iterate(list) {
-    let i = {idx: 0}
-    return {
-        next: function() {
-            if (i.idx < list.size) {
-                let temp = list[i.idx]
-                i.idx += 1
-                return temp
-            }
-            else {
-                return null
-            }
-        },
-        hasNext: function() (i.idx < list.size)
-    }
-}
-
-let itr = iterate([5, 7, 2, 8])
-let n;
-while (itr.hasNext()) {
-    n = itr.next();
-    print(n, "")
-}
-println()
-
-println("Lambda Tests")
-println("8 * 9 =", (function (a) a * 8)(9))
-println("7 * 4 =", (function (a) {return a * 7})(4))
-
-let woah = function (x) function (y) x * y
-println("12 * 13 = ", woah(12)(13)) # = 156
-
-let what = function (job = "developer", name = "SMG") ({
-    name: name, job: job
-})
-
-println("Default Argument Tests")
-println("arg ->", what("engineer"))
-println("no arg ->", what())
-
-println("Default Argument Tests")
-let person = what()
-person.level = "Professional"
-println("modded prop ->", person)
-person["title"] = "Senior"
-println("modded prop 2 ->", person)
-
-# Try Catch
-print("Try without catch -> ")
-let success = "pass"
-try {
-    print(1 / 0)
-    success = "fail"
-}
-println(success)
-
-print("Try with catch -> ")
-try {
-    let deep = null ["love"]
-    println("fail")
-}
-catch e {
-    println("success! caught:", e)
-}
-
-print("Try with finally -> ")
-try {
-    let deep = null ["love"]
-    print("fail, ")
-}
-catch (e) {
-    print("caught, ")
-}
-finally {
-    println("finally.")
-}
-
-# Scopes and Shadowing
-println("Scopes and Shadowing Test (Result should be %s, 10, 100, 1000, 1000, 10)" % x)
-print("Result -> %s, " % x)
-{
-    let x = 10; print("%s, " % x)
-    {
-        let x = 100; print("%s, " % x)
-        {
-            x = 1000; print("%s, " % x)
+            return STOP
         }
-        print("%s, " % x)
+        break
     }
-    print("%s" % x)
-}
-println()
-
-
-# Assignments
-print("Assignment Operator Tests -> ")
-let p = function(s) print(s, "")
-let num = 12; p(num); num -= 2; p(num); num += 15; p(num); num /= 5; p(num); num *= 7; p(num); num %= 4; p(num)
-let bool = true; p(bool); bool |= false; p(bool); bool &= false; p(bool)
-println()
-
-# BigDecimals
-print("Big Decimal Tests ")
-if (!exists("bigd")) {
-    println("(bigd() is not defined! Aborting.)")
-}
-else {
-    println()
-    println("Big D -> ", bigd(3.14), type(bigd(3.14)))
-    println("Big D + double -> ", bigd(3.14) + 2.5, type(bigd(3.14) + 2.5))
 }
 
-# Binary Expressions
-println("Binary Expression Tests")
+# [[Rule: Setup]]
+function untouched(field) { return get(Claim, field) == "UNTOUCHED" }
 
-let pc = { count: 1 }
-let plist = function(text) {
-    println(("%d. " % pc.count) + text)
-    pc.count += 1
+# Setup Claims
+for (field in status_fields) {
+    if untouched(field) { set(Claim, field, "INCOMPLETE"); }
 }
 
-let d = 3.14
-plist("" + d + (" (%s)" % type(d)))
-d = 3.14 + 100
-plist("" + d + (" (%s)" % type(d)))
-d = 314 - bigd(100.50)
-plist("" + d + (" (%s)" % type(d)))
-d = 314 / 100
-plist("" + d + (" (%s)" % type(d)))
-d = 314 % 100
-plist("" + d + (" (%s)" % type(d)))
-d = 314 * 100
-plist("" + d + (" (%s)" % type(d)))
-d = 314 or 100
-plist("" + d + (" (%s)" % type(d)))
-d = 314 and 0
-plist("" + d + (" (%s)" % type(d)))
-d = integer(2)
-plist("" + d + (" (%s)" % type(d)))
-d = integer(2) + 1
-plist("" + d + (" (%s)" % type(d)))
+let eval_fields = [ "Batch_Date", "Knowledge", "Case_ID", "Evidence_Bankruptcy", "Offer_Date", "Account_Number", 
+"Borrower_Name", "Borrower_DOB", "Advance", "Broker_Present", "Broker_Name", "Broker_Fee", "Property_Address", 
+"England_Wales", "Commission_Mention", "Commission_Amount", "Disclosure_Date", "Mortgage_Type", "Statement_Start", 
+"Statement_End", "Selected_Lender", "Statement_Completeness", "Statement_Clarification", "Redeemed", "Redemption_Date", 
+"Further_Advance" ]
+
+for (field in eval_fields) {
+    set(Eval, field, "")
+}
+
+# [[Rule: Validate Completeness]]
+# Case details evaluation
+function empty(field) {
+    let value = get(Claim, field) 
+    if value == null { return true }
+    else if (type(value) == "String") { return value == "" } 
+    else if (type(value) == "Integer" or type(value) == "Long") { return value == 0 }
+    return false   
+}
+
+
+if untouched("Case_Details_Status") {
+    let field_messages = {
+        Batch_Date: "Batch Date cannot be null.",
+        Knowledge: "Knowledge Date cannot be null.",
+        Case_ID: "Case ID cannot be null.",
+        Evidence_Bankruptcy: "Evidence of Bankruptcy cannot be null.",
+    }
+
+    let completeness = "COMPLETE"
+    for (field in field_messages) {
+        if empty(field) {
+            set(Eval, field, field_messages[field])
+            completeness = "INCOMPLETE"
+        }
+    }
+        
+    set(Claim, "Case_Details_Status", completeness)
+}
+
+
+if get(Claim, "Offer_Letter_Present") == "NO" {
+    set(Claim, "Offer_Letter_Present", "COMPLETE")
+}
+else if empty("Offer_Letter_Present") and untouched("Offer_Letter_Status") {
+    set(Claim, "Offer_Letter_Status", "INCOMPLETE")
+}
+else if get(Claim, "Offer_Letter_Present") == "YES" {
+    let msgs = {
+        Batch_Date: "Batch Date cannot be null.",
+        Knowledge: "Knowledge Date cannot be null.",
+        Case_ID: "Case ID cannot be null.",
+        Evidence_Bankruptcy: "Evidence of Bankruptcy cannot be null.",
+    }
+
+    let comp = "COMPLETE"
+    for (field in msgs) {
+        if empty(field) {
+            set(Eval, field, msgs[field])
+            comp = "INCOMPLETE"
+        }
+    }
+        
+    set(Claim, "Case_Details_Status", completeness)
+}
+
+
+if get(Claim, "Offer_Letter_Present") == "NO" {
+    set(Claim, "Offer_Letter_Status", "COMPLETE")
+}
+else if empty(Claim, "Offer_Letter_Present") and untouched("Offer_Letter_Status") {
+    set(Claim, "Offer_Letter_Status", "INCOMPLETE")
+}
+else if get(Claim, "Offer_Letter_Present") == "YES" {
+    let msgs = {
+        Offer_Date: "Offer Date should not be empty.",
+        Account_Number: "Account Number should not be empty.",
+        Borrower_Name: "Borrower Name should not be empty.",
+        Advance: "Advance should not be empty.",
+        Property_Address: "Property Address should not be empty.",
+        England_Wales: "England Wales should not be empty.",
+        Commission_Mention: "Mention of Commission should not be empty.",
+    }
+
+    let comp = "COMPLETE"
+    for (field in msgs) {
+        if empty(field) {
+            set(Eval, field, msgs[field])
+            comp = "INCOMPLETE"
+        }
+    }
+
+    let extmsgs = {
+        broker: "Broker Name should not be empty.",
+        broker_present: "Broker Name Present should not be empty.",
+        commission: "Commission Amount should be a positive non-zero amount.",
+        disclosure: "Disclosure Date should not be empty.",
+    }
+
+    if empty("Broker_Name_Present") {
+        set(Eval, "Broker_Name_Present", extmsgs.broker_present)
+        comp = "INCOMPLETE"
+    }
+    else if (get(Claim, "Broker_Name_Present") == "YES" and empty("Broker_Name")) {
+        set(Eval, "Broker_Name", extmsgs.broker);
+        comp = "INCOMPLETE"
+    }
+
+    if get(Claim, "Commission_Mention") == "DISCLOSED" {
+        if empty("Commission_Amount") { 
+            set(Eval, "Commission_Amount", extmsgs.commission); 
+            comp = "INCOMPLETE"
+        }
+        if empty("Disclosure_Date") { 
+            set(Eval, "Disclosure_Date", extmsgs.disclosure); 
+            comp = "INCOMPLETE"
+        }
+    }
+
+    set(Claim, "Case_Details_Status", comp)
+} 
+
+
+if get(Claim, "Application_Present") == "NO" {
+    set(Claim, "Application_Letter_Status", "COMPLETE")
+}
+else if get(Claim, "Application_Present") == null and get(Claim, "Application_Letter_Status") != "UNTOUCHED" {
+    set(Claim, "Application_Letter_Status", "INCOMPLETE")
+}
+else if get(Claim, "Application_Present") == "YES" {
+    let msgs = {
+        Mortgage_Type: "Type of Mortgage should not be empty.",
+        Borrower_Name: "Borrower Name should not be empty.",
+        Borrower_DOB: "Borrower Date of Birth should not be empty.",
+    }
+
+    let comp = "COMPLETE"
+    for (field in msgs) {
+        if (empty(field)) {
+            set(Eval, field, msgs[field])
+            comp = "INCOMPLETE"
+        }
+    }
+    
+    let extmsgs = {
+        broker: "Broker Name should not be empty.",
+        broker_present: "Broker Name Present should not be empty.",
+    }
+    if empty("Broker_Name_Present") {
+        set(Eval, "Broker_Name", extmsgs.broker_present)
+        comp = "INCOMPLETE"
+    }
+    else if (get(Claim, "Broker_Name_Present") == "YES" and empty("Broker_Name")) {
+        set(Eval, "Broker_Name", extmsgs.broker);
+        comp = "INCOMPLETE"
+    }
+
+    set(Claim, "Application_Letter_Status", comp)
+} 
+
+# Statements evaluation 
+if get(Claim, "Statements_Present") == "NO" {
+    set(Claim, "Statements_Status", "COMPLETE")
+}
+else if empty(Claim, "Statements_Present") and untouched("Statements_Status") {
+    set(Claim, "Statements_Status", "INCOMPLETE")
+}
+else if get(Claim, "Statements_Present") == "YES" {
+
+    let msgs = {
+        Account_Number: "Account Number should not be empty.",
+        Statement_Start: "Statement Start should not be empty.",
+        Statement_End: "Statement End should not be empty.",
+        Statement_Completeness: "Statement Completeness should not be empty.",
+        Redeemed: "Redeemed should not be empty.",
+    }
+
+    let comp = "COMPLETE"
+    for (field in msgs) {
+        if (empty(field)) {
+            set(Eval, field, msgs[field])
+            comp = "INCOMPLETE"
+        }
+    }
+    
+    let extmsgs = {
+        lender: "Selected Lender should not be empty.",
+        clarification: "Statement Clarification should not be empty.",
+        redemption: "Redemption Date should not be empty.",
+    }
+
+    if empty(Claim, "Vetters.Selected_Lender") {
+        set(Eval, "Selected_Lender", extmsgs.lender)
+        comp = "INCOMPLETE"
+    }
+
+    if get(Claim, "Statement_Completeness") == "PARTIAL" and empty("Statement_Clarification") {
+        set(Eval, "Statement_Clarification", extmsgs.clarification)
+        comp = "INCOMPLETE"
+    }
+
+    if get(Claim, "Redeemed") == "PARTIAL" and empty("Redemption_Date") {
+        set(Eval, "Redemption_Date", extmsgs.redemption)
+        comp = "INCOMPLETE"
+    }
+
+    set(Claim, "Statements_Status", comp)
+} 
+
+# Further advance evaluation
+if get(Claim, "Further_Advance_Present") == "NO" {
+    set(Claim, "Further_Advance_Status", "COMPLETE")
+}
+else if empty(Claim, "Further_Advance_Present") and untouched("Further_Advance_Status") {
+    set(Claim, "Further_Advance_Status", "INCOMPLETE")
+}
+else if get(Claim, "Further_Advance_Present") == "YES" {
+
+    let FMissings = ""
+    for (let i = 1; i <= 5; i += 1) {
+        if empty("Further_Advance_Date_" + i) { FMissings += "  - Further Advance Date %d\n" % i; }
+        if empty("Further_Advance_" + i) { FMissings += "  - Further Advance %d\n" % i; }
+    }
+    
+    if FMissings != "" {
+        set(Claim, "Further_Advance_Status", "INCOMPLETE")
+        set(Eval, "Further_Advance", "The following fields should not be empty: \n" + FMissings)
+    }
+    else {
+        set(Claim, "Further_Advance_Status", "COMPLETE")
+    }
+}
+
+# [[Rule: Validate Correctness]]
+let ElaraEval = "";
+let CSmithEval = "";
+let SerenityEval = "";
+
+let ElaraSharedEval = "";
+let CSmithSharedEval = "";
+let SerenitySharedEval = "";
+let SharedEval = "";
+
+let year = 365.25 * 24 * 60 * 60 * 1000
+Today = Today as long
+
+function getAsLong(thing, prop) { get(thing, prop) as long }
+function getAsDouble(thing, prop) { get(thing, prop) as double }
+
+let age;
+if not empty("Borrower_DOB") {
+    age = getAsLong(Claim, "Borrower_DOB")
+}
+
+# Criteria Breakdown (as of 2023-11-10)
+# Claimsmiths
+# 1. Date of Knowledge < Today - 5.25 years
+# 2. Broker Fees Present
+# 3. First Mortgage and Offer Date < 31/10/2004
+# 4. Borrower DOB - Today > 75 years
+# 5. Not Buy-to-Let
+# 6. Sub Prime Lender
+# 7. Offer Present, Commission not fully disclosed
+# 8. Not Bankrupt
+# 9. Broker Present
+# 10. England Wales
+# 11. Statement Completeness [Evaluated by a human] 
+#
+# Elara
+# 1. Application, Statement all present
+# 2. Redemption > Today - 5.5 years
+# 3. Not Buy-to-Let
+# 4. Sub Prime Lender
+# 5. Redeemed = YES
+# 6. Second Mortgage and Redemption > March 2016
+# 7. Offer Present, Commission not fully disclosed
+# 8. Not Bankrupt
+# 9. Broker Present
+# 10. England Wales
+# 11. Statement Completeness [Evaluated by a human] 
+# 
+# Serenity
+# 1. Date of Knowledge < Today - 6 years
+# 2. Advance >= 110,000
+# 3. Second Mortgage and Redemption > March 2016
+# 4. First Mortgage and Offer Date < 31/10/2004
+# 5. Borrower DOB - Today > 75 years
+# 6. Offer Present, Commission not fully disclosed
+# 7. Not Bankrupt
+# 8. Broker Present
+# 9. England Wales
+# 10. Statement Completeness [Evaluated by a human] 
+
+let msgs = {
+    too_young:  "Borrower younger than 18.",
+    future_batch: "Batch Date cannot be in the future.",
+    future_knowledge: "Date of Knowledge cannot be in the future.",
+    future_offer: "Offer taken out in the future.",
+    early_end: "Statement End Date cannot come before Start Date.",
+    late_start: "Statement Start Date cannot come after Batch Date.",
+}
+
+function pad(text) { "    - " + text + "\n" }
+
+if get(Claim, "Application_Letter_Status") == "COMPLETE" {
+    if age < 18 * year { set(Eval, "Borrower_DOB", msgs.too_young); }
+
+    # Serenity & Claimsmiths
+    else if age > 74.5 * year { 
+        let m = pad("Borrower older than 75.");
+
+        SerenitySharedEval += m; 
+        CSmithSharedEval += m;
+    }
+
+    
+    # Elara & Claimsmiths
+    if get(Claim, "Mortgage_Type") == "BUY_TO_LET" { 
+        let m = pad("Mortgage is Buy-to-Let.");
+
+        ElaraSharedEval += m; 
+        CSmithSharedEval += m;
+    }
+    
+    # Elara & Claimsmiths
+    let Lender = get(Claim, "Vetters.Selected_Lender")
+    if get(Lender, "Primeness") != "SUB_PRIME" { 
+        let m = pad("The selected lender must be a sub-prime one.");
+
+        ElaraSharedEval += m; 
+        CSmithSharedEval += m;
+    }
+    
+    # Elara & Serenity
+    if (get(Claim, "Mortgage_Type") == "SECOND_MORTGAGE" and getAsLong(Claim, "Redemption_Date") > makeDate(31, 03, 2016)) { 
+        let m = pad("Second Mortgage past March 2016.");
+
+        ElaraSharedEval += m; 
+        SerenitySharedEval += m;
+    }
+}
+
+if get(Claim, "Case_Details_Status") == "COMPLETE" {
+    if getAsLong(Claim, "Batch_Date") > Today { set(Eval, "Batch_Date", msgs.future_batch); }
+    if getAsLong(Claim, "Knowledge_Date") > Today { set(Eval, "Batch_Date", msgs.future_knowledge); }
+    if getAsLong(Claim, "Offer_Date") > getAsLong(Claim, "Batch_Date") { set(Eval, "Offer_Date", msgs.future_offer); }
+    
+    # Serenity Only
+    if getAsLong(Claim, "Knowledge_Date") < Today - 6 * year { SerenityEval += pad("Date of Knowledge must be within the last 6 years."); }
+    
+    # Claimsmiths Only
+    if getAsLong(Claim, "Knowledge_Date") < Today - 5.25 * year { CSmithEval += pad("Date of Knowledge must be within the last 6 years and not expire within 9 months."); }
+}
+if get(Claim, "Statements_Status") == "COMPLETE" {
+    if (getAsLong(Claim, "Statement_Start") > getAsLong(Claim, "Statement_End") ) { set(Eval, "Statement_End", early_end); }
+    if (getAsLong(Claim, "Statement_Start") > getAsLong(Claim, "Batch_Date") ) { set(Eval, "Statement_Start", late_start); }
+   
+    # Elara Only
+    if get(Claim, "Redeemed") != "YES" { ElaraEval += pad("Agreement is not redeemed."); }
+    else if (getAsLong(Claim, "Redemption_Date") < Today - 5.5 * year) { ElaraEval += pad("Redemption date outside of limitation period."); }
+}
+
+if get(Claim, "Offer_Letter_Status") == "COMPLETE" {
+
+    # Serenity Only
+    if (getAsDouble(Claim, "Advance") < 110000) { SerenityEval += pad("Advance is less than £110,000"); }
+    
+    # Claimsmiths Only
+    if (get(Claim, "Broker_Fee") <= 0) { CSmithEval += pad("There must be a broker fee."); }
+
+    # Serenity & Claimsmiths
+    if getAsLong(Claim, "Offer_Date") > makeDate(31, 10, 2004) and get(Claim, "Mortga_Type") == "FIRST_MORTGAGE" {
+        let m = pad("Offer Date is after 31/10/2004 and it is a First Mortgage.");
+
+        SerenitySharedEval += m; 
+        CSmithSharedEval += m;
+    }
+}
+
+# Elara Only
+if get(Claim, "Application_Present") == "NO" { ElaraEval += pad("Application Letter is missing."); }
+if get(Claim, "Statements_Present") == "NO" { ElaraEval += pad("No statements present."); }
+
+
+# All
+if (get(Claim, "Offer_Letter_Present") != "YES") { 
+    SharedEval += pad("No offer letter present."); 
+} 
+else if (get(Claim, "Commission_Mention") == "DISCLOSED" and get(Claim, "Disclosure_Date") == "AGREEMENT_START") {
+    SharedEval += pad("Commission disclosed at the time of agreement."); 
+}
+
+# All
+if get(Claim, "Evidence_Bankruptcy") != "NOT" { SharedEval += pad("Claimant is bankrupt."); }
+
+# All
+if get(Claim, "Application_Present") == "YES" {
+    if (get(Claim, "Broker_Name_Present") == "NO") { SharedEval += pad("No broker present."); }
+    if (get(Claim, "England_Wales") == "NO") { SharedEval += pad("Agreement signed outside of E&W."); }
+}
+
+
+# Section Invalidation
+empty = function(field) {
+    let value = get(Eval, field) 
+    if value == null { return true }
+    else if (type(value) == "String") { return value == "" } 
+    else if (type(value) == "Integer" or type(value) == "Long") { return value == 0 }
+    return false   
+}
+
+if (get(Claim, "Case_Details_Status") == "COMPLETE") {
+    for (field in ["Batch_Date", "Knowledge", "Case_ID", "Evidence_Bankruptcy"]) {
+        if (!empty(field)) { set(Claim, "Case_Details_Status", "ERRONEOUS"); break }
+    }
+}
+
+if (get(Claim, "Offer_Letter_Status") == "COMPLETE") {
+    for (field in ["Mortgage_Type", "Offer_Date", "Account_Number", "Borrower_Name", "Advance", "Broker_Present", "Broker_Name", "Broker_Fee", "Property_Address", "Commission_Mention", "Commission_Amount", "Disclosure_Date", "England_Wales"]) {
+        if (!empty(field)) { set(Claim, "Offer_Letter_Status", "ERRONEOUS"); break }
+    }
+}
+
+if (get(Claim, "Application_Letter_Status") == "COMPLETE") {
+    for (field in ["Borrower_DOB", "Mortgage_Type", "Borrower_Name", "Borrower_DOB", "Broker_Name"]) {
+        if (!empty(field)) { set(Claim, "Application_Letter_Status", "ERRONEOUS"); break }
+    }
+}
+
+if (get(Claim, "Statements_Status") == "COMPLETE") {
+    for (field in ["Statement_Start", "Statement_End", "Account_Number", "Selected_Lender", "Statement_Completeness", "Statement_Clarification", "Redeemed", "Redemption_Date"]) {
+        if (!empty(field)) { set(Claim, "Statements_Status", "ERRONEOUS"); break }
+    }
+}
+
+if (get(Claim, "Further_Advance_Status") == "COMPLETE" and !empty("Further_Advance") ) {
+    set(Claim, "Further_Advance_Status", "ERRONEOUS")
+}
+
+clearSummaries()
+
+# Evaluation Summary
+let complete = true
+for (status in status_fields) {
+    if (get(Claim, status) != "COMPLETE") {
+        complete = false
+        break
+    }
+}
+
+if complete {
+    let Elara = ElaraEval + ElaraSharedEval + SharedEval
+    if Elara != "" { setSummary(1, "ERRONEOUS", "Rejected by Elara:\n" + Elara) }
+    else { setSummary(1, "COMPLETE", "Accepted by Elara") }
+
+    let CSmith = CSmithEval + CSmithSharedEval + SharedEval
+    if CSmith != "" { setSummary(2, "ERRONEOUS", "Rejected by Claimsmiths:\n" + CSmith) }
+    else { setSummary(2, "COMPLETE", "Accepted by Claimsmiths") }
+
+    let Serenity = SerenityEval + SerenitySharedEval + SharedEval
+    if Serenity != "" { setSummary(3, "ERRONEOUS", "Rejected by Serenity:\n" + Serenity) }
+    else { setSummary(3, "COMPLETE", "Accepted by Serenity") }
+
+    if get(Claim, "Stage") == "UNSTAGED" { set(Claim, "Stage", "STAGED") }
+}
+else if get(Claim, "Stage") == "STAGED" {
+    set(Claim, "Stage", "UNSTAGED")
+}

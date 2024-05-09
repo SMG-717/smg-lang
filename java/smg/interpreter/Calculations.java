@@ -101,12 +101,37 @@ public class Calculations {
     static Object calcBinary(
         Interpreter intr, BinaryOp op, Object lhs, Object rhs
     ) {
+        
+        // 1. Allow boolean arithmetic operations on any values, even if they 
+        //    have not yet been calculated! Non-null and non-zero objects are 
+        //    considered truthy with some exceptions. Read the castValue 
+        //    function for more details. 
+        if (of(lhs, NodeTerm.class)) lhs = intr.runTerm((NodeTerm) lhs);
+        if (op == BinaryOp.And) {
+            if ((Boolean) castValue(intr, "boolean", lhs)) {
+                return !of(rhs, NodeTerm.class) ? rhs :
+                    intr.runTerm((NodeTerm) rhs);
+            }
+            return lhs;
+        }
+        else if (op == BinaryOp.Or) {
+            if (!(Boolean) castValue(intr, "boolean", lhs)) {
+                return !of(rhs, NodeTerm.class) ? rhs :
+                    intr.runTerm((NodeTerm) rhs);
+            }
+            return lhs;
+        }
+
+        // Otherwise, evaluate the right side now as everything from here can no
+        // longer be lazily evaluated (yet).
+        if (of(rhs, NodeTerm.class)) rhs = intr.runTerm((NodeTerm) rhs);
+
+        final String ltype = javaType(lhs), rtype = javaType(rhs);
         final RuntimeException invalidExpr = intr.error(
-            "Invalid binary expression: (%s) %s (%s)", 
-                javaType(lhs), op, javaType(rhs)
+            "Invalid binary expression: (%s) %s (%s)", ltype, op, rtype
         );
 
-        // 1. The operands are checked for nullness. If either of them are null,
+        // 2. The operands are checked for nullness. If either of them are null,
         //    permit only the equality operations.
         if (lhs == null || rhs == null) {
             switch (op) {
@@ -117,7 +142,7 @@ public class Calculations {
             }
         }
         
-        // 2. If the operation is equality, and neither operand is a number, use
+        // 3. If the operation is equality, and neither operand is a number, use
         //    the default java implementation to test it.
         if (!anyOf(Number.class, lhs, rhs)) {
             switch (op) {
@@ -125,19 +150,6 @@ public class Calculations {
                 case NotEqual: return !lhs.equals(rhs);
                 default:
             }
-        }
-
-        // 3. Additionally, allow boolean arithmetic operations on any values.
-        //    Non-null and non-zero objects are considered truthy with some 
-        //    exceptions. Read the castValue function for more details. 
-        switch (op) {
-            case And: 
-                return (Boolean) castValue(intr, "boolean", lhs) &&
-                    (Boolean) castValue(intr, "boolean", rhs);
-            case Or: 
-                return (Boolean) castValue(intr, "boolean", lhs) || 
-                    (Boolean) castValue(intr, "boolean", rhs);
-            default:
         }
 
         // 4. If the LHS is a string, allow only concatenation and formatting
