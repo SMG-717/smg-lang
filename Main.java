@@ -15,11 +15,8 @@ import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
 public class Main {
-
-    public static void main(String[] args) throws IOException {
-        final String code = String.join("\n", Files.readAllLines(Paths.get("./code.smg")));
-        final Object program = new Parser(code).parse();
-        System.out.println(program);
+    public static void main(String[] args) throws Exception {
+        main1();
     }
 
     public static void main2() {
@@ -71,15 +68,15 @@ public class Main {
 
         intr.setBigDecimalMode(false);
 
-        final Object result = intr.run();
-        System.out.println(result == null ? "" : result);
         try {
+            final Object result = intr.run();
+            System.out.println(result == null ? "" : result);
         }
         catch (Exception e) {
             System.out.println(red(e.getMessage()));
         }
 
-        System.out.println(((Number) 1l).doubleValue() == 1.0D);
+        System.out.println(new Parser(code).parse());
     }
 
     

@@ -340,14 +340,14 @@ public class Parser {
         final int currentline = line;
         
         NodeTerm expr = left;
-        while (peek().isAny(TokenType.BinaryArithmetic) && peek().precedence >= prec) {
+        while (peek().isAny(TokenType.BinaryArithmetic) && peek().prec >= prec) {
             final Token op = tryConsume(TokenType.BinaryArithmetic);
             NodeTerm right = parseTerm();
 
             while (peek().isAny(TokenType.BinaryArithmetic) && (
-                (peek().precedence > op.precedence) || 
-                (peek().precedence >= op.precedence && peek().rightassoc))) {
-                right = new NodeTerm.Expr(parseExpression(right, op.precedence + (peek().precedence > op.precedence ? 1 : 0)));
+                (peek().prec > op.prec) || 
+                (peek().prec >= op.prec && peek().rassoc))) {
+                right = new NodeTerm.Expr(parseExpression(right, op.prec + (peek().prec > op.prec ? 1 : 0)));
             }
             expr = new NodeTerm.Expr(arthmeticNode(op, expr, right));
         }
@@ -680,7 +680,7 @@ class NodeScope {
                 .map(x -> x.toString() + ";\n")
                 .collect(Collectors.toList())),
             2)
-        + "}";
+        + "\n}";
     }
 }
 
@@ -937,7 +937,7 @@ interface NodeTerm {
                     .map(e -> e.toString())
                     .collect(Collectors.toList())),
                 2)
-            + "}"; 
+            + "\n}"; 
         } 
         public MapLiteral(List<NodeMapEntry> i) { items = i; }
     }
