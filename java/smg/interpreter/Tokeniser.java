@@ -28,7 +28,7 @@ public class Tokeniser {
                         (state == D_STR_LIT && tryConsume(Token.DoubleQuote))) {
                         final String bufferValue = escape(buffer.toString());
                         buffer.setLength(0);
-                        return Token.makeToken(bufferValue, TokenType.StringLiteral);
+                        return Token.make(bufferValue, TokenType.StringLiteral);
                     }
 
                     else if (tryConsume(Token.Newline)) {
@@ -44,7 +44,7 @@ public class Tokeniser {
                     buffer.append(token == null ? consume() : token.value);
                     
                     if (token == Token.Newline || peek() == Token.EOF) 
-                        return Token.makeToken(buffer.toString(), TokenType.Comment);
+                        return Token.make(buffer.toString(), TokenType.Comment);
                     
                     break;
                 }
@@ -78,7 +78,7 @@ public class Tokeniser {
                 default:
                     if (buffer.length() > 0) {
                         final String bufferValue = buffer.toString();
-                        return Token.makeToken(bufferValue, state == NUMBER ? 
+                        return Token.make(bufferValue, state == NUMBER ? 
                             TokenType.NumberLiteral : TokenType.Qualifier);
                     }
 
@@ -91,7 +91,7 @@ public class Tokeniser {
             }
         }
 
-        // No more tokens can be found, and an End of Tokens token will be returned.
+        // No more tokens can be found, and an End of Tokens token is returned.
         return Token.EOT;
     }
 
@@ -113,6 +113,7 @@ public class Tokeniser {
                 return token;
             }
         }
+
         return null;
     }
 

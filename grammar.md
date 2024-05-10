@@ -17,8 +17,10 @@ Production operations:
 Program     -> [StmtTerm]* ([Statement] ([StmtTerm]+ [Statement])* [StmtTerm]*)?
 Scope       -> '{' [Program] '}'
 StmtTerm    -> '\n' | ';'
-Statement   -> [Scope] | [Assign] | [Expr] | [Control] | [Definition] | [Comment]
-Control     -> [If] | [While] | [ForEach] | [ForLoop] | [Break] | [Continue] | [Try]
+Statement   -> [Scope] | [Assign] | [Expr] | [Control] | [Definition] 
+.               | [Comment]
+Control     -> [If] | [While] | [ForEach] | [ForLoop] | [Break] | [Continue] 
+.               | [Try]
 Definition  -> [Decl] | [Func] | [Return]
 Comment     -> '#' (_Anything_)* '\n'
 
@@ -29,21 +31,25 @@ If          -> 'if' [Expr] [Scope] ('else if' [Expr] [Scope])* ('else' [Scope])?
 Try         -> 'try' [Scope] ('catch' [Qualifier] [Scope])? ('finally' [Scope])?
 While       -> 'while' [Expr] [Scope]
 ForEach     -> 'for' '(' [Qualifier] 'in' [Term] ')' [Scope]
-ForLoop     -> 'for' '(' ([Assign] | [Decl])? ';' [Expr]? ';' ([Assign] | [Expr])? ')' [Scope]
-Func        -> 'function' [Qualifier] '(' (([Param]) (',' ([Param]))*)? ')' [Scope]
+ForLoop     -> 'for' '(' ([Assign] | [Decl])? ';' [Expr]? ';' 
+.               ([Assign] | [Expr])? ')' [Scope]
+Func        -> 'function' [Qualifier] '(' (([Param]) (',' ([Param]))*)? ')' 
+.               [Scope]
 Expr        -> [Term] ([BinaryOp] [Term])?
 Return      -> 'return' [Expr]?
 Break       -> 'break'
 Continue    -> 'continue'
 
 # Terms
-Term        -> '(' [Expr] ')' | [ArrayLit] | [MapLit] | [UnaryExpr] | [ArrayAccess] | 
-    [Qualifier] | [Accessor] | [Literal] | [FCall] | [Cast] | [Lambda]
+Term        -> '(' [Expr] ')' | [ArrayLit] | [MapLit] | [UnaryExpr] | 
+.              [ArrayAccess] | [Qualifier] | [Accessor] | [Literal] | [FCall] | 
+.              [Cast] | [Lambda]
 UnaryExpr   -> [UnaryOp] [Term]
 Accessor    -> [Term] '.' [Qualifier]
 FCall       -> [Term] '(' ([Expr] (',' [Expr])*)? ')'
 Cast        -> [Term] 'as' [Type]
-Lambda      -> 'function' '('(([Param]) (',' ([Param]))*)? ')' ([Scope] | [Expr])
+Lambda      -> 'function' '('(([Param]) (',' ([Param]))*)? ')' 
+.              ([Scope] | [Expr])
 
 # Maps and Arrays
 ArrayAccess -> [Term] '[' [Expr] ']'
@@ -64,7 +70,8 @@ String      -> ('\"' (_Anything_)* '\"') | ('\'' (_Anything_)* '\'')
 Decimal     -> [Integer] '.' [Integer]
 Integer     -> [Digit]+
 Digit       -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-Type        -> 'int' | 'long' | 'double' | 'float' | 'char' | 'string' | 'boolean' | 'date'
+Type        -> 'int' | 'long' | 'double' | 'float' | 'char' | 'string' | 
+.              'boolean' | 'date'
 
 # Operators
 AssignOp    -> '=' | '^=' | '*=' | '/=' | '%=' | '+=' | '-=' | '&=' | '|='

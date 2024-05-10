@@ -39,7 +39,8 @@ class Types {
 
     static boolean doublish(Object... values) {
         for (Object value : values) {
-            if (ofAny(value, Double.class, Float.class, BigDecimal.class)) return true;
+            if (ofAny(value, Double.class, Float.class, BigDecimal.class)) 
+                return true;
         }
         return false;
     }

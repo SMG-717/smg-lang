@@ -155,8 +155,11 @@ public class Token {
         this.rassoc = r;
     }
 
-    public boolean hasValue() { return !value.isBlank(); }
-    public static Token makeToken(String name, TokenType type) {
+    public boolean hasValue() {
+        return !value.isBlank();
+    }
+
+    static Token make(String name, TokenType type) {
         return new Token(name, type);
     }
 

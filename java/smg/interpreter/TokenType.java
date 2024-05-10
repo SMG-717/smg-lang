@@ -8,8 +8,19 @@ package smg.interpreter;
  * the current implementation of the Tokeniser.
  */
 public enum TokenType {
-    Qualifier, Keyword, CastType, Punctuation, WhiteSpace, Comment,
-    NumberLiteral, StringLiteral, BooleanLiteral, DateLiteral,
-    BinaryArithmetic, UnaryArithmetic, AssignOperator,
-    StatementTerminator, ScopeTerminator;
+    Qualifier,
+    Keyword,
+    CastType,
+    Punctuation,
+    WhiteSpace,
+    Comment,
+    NumberLiteral,
+    StringLiteral,
+    BooleanLiteral,
+    DateLiteral,
+    BinaryArithmetic,
+    UnaryArithmetic,
+    AssignOperator,
+    StatementTerminator,
+    ScopeTerminator;
 }
