@@ -118,6 +118,8 @@ function iterate(list) {
 
 let itr = iterate([5, 7, 2, 8, ])
 let n;
+
+let int_itr = itr
 while (itr.hasNext()) {
     n = itr.next();
     print(n, "")

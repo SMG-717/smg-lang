@@ -90,7 +90,7 @@ public class Tokeniser {
                 case D_STR_LIT:
 
                     // Strings must end in the correct token.
-                    if ((state == S_STR_LIT && tryConsume(Token.SingleQuote)) || 
+                    if ((state == S_STR_LIT && tryConsume(Token.SingleQuote)) ||
                         (state == D_STR_LIT && tryConsume(Token.DoubleQuote))) {
                         final String value = escape(buffer.toString());
                         buffer.setLength(0);
@@ -101,7 +101,7 @@ public class Tokeniser {
                     else if (tryConsume(Token.Newline)) 
                         throw error("Unexpected new line in string literal");
                     
-                    // Otherwise, everything encountered is part of the string.                    
+                    // Otherwise, everything encountered is part of the string.
                     buffer.append(consume());
                     break;
                 
@@ -192,7 +192,7 @@ public class Tokeniser {
      * Peek and Consume
      * 
      * The most basic operations of the tokeniser and the reason why it works so
-     * well. Peeking is when the current character in the program string is read 
+     * well. Peeking is when the current character in the program string is read
      * without changing anything about the tokeniser state. Consuming is reading
      * that character and progressing to the next character in the program.
      * 
@@ -204,26 +204,44 @@ public class Tokeniser {
      */
 
     // Peek the current character. Return EOF if we reach the end.
-    private char peek() {
-        return loc == program.length() ? Token.EOF : program.charAt(loc);
+    private char peek() { return peek(0); }
+
+    // Peek ahead of the current character by a certain amount. Return EOF if we
+    // reach the end.
+    private char peek(int offset) {
+        return loc + offset == program.length() ? 
+            Token.EOF : 
+            program.charAt(loc + offset);
     }
 
     // Peek a consumable of fixed length. Return EOF if we reach the end.
     private String peekLots(int amount) {
         return loc + amount > program.length() ? 
-            String.valueOf(Token.EOF) : program.substring(loc, loc + amount);
+            String.valueOf(Token.EOF) : 
+            program.substring(loc, loc + amount);
     }
 
-    // Consume the next consumable if it exactly matches the value of a definite 
+    // Consume the next consumable if it exactly matches the value of a definite
     // token. The biggest token that matches the consumable wins.
     private Token tryConsume() {
         String c = ""; Token best = null;
         for (Token token : Token.tokenList) {
-            final int len = token.value.length(), 
+            final int len = token.value.length(),
             blen = best == null ? 0 : best.value.length();
 
             if (len != c.length()) c = peekLots(len);
-            if (c.equals(token.value) && len > blen) best = token;
+            if (c.equals(token.value) && len > blen) {
+
+                // If the matched token is a keyword, make sure it isn't 
+                // followed by a valid qualifier character
+                if (token.isAny(TokenType.Keyword) && (
+                    alpha(peek(len)) || 
+                    numeric(peek(len)) || 
+                    peek(len) == '_'
+                )) continue;
+
+                best = token;
+            }
         }
 
         if (best != null) consumeLots(best.value.length());
