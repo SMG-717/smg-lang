@@ -196,3 +196,25 @@ let bool = true; p(bool); bool |= false; p(bool); bool &= false; p(bool)
 
 # We have a little fun
 # println("Print Self:\n " + parser())
+
+# lxy.xy
+# function(x) function (y) x(y)
+
+# Church Numerals
+let zero = fn(z) fn(s) z
+let one = fn(z) fn(s) s(z)
+let two = fn(z) fn(s) s(s(z))
+let three = fn(z) fn(s) s(s(s(z)))
+
+let view = fn(n) n + 1
+
+println("\nLambda Calculus Experiment")
+println(one(0)(view))
+println(two(0)(view))
+println(three(0)(view))
+# println(succ(three)(0)(view))
+
+let adder = fn(m) fn(n) fn(z) fn(s) n(m(z)(s))(s)
+print(adder(two)(three)(0)(view))
+
+
