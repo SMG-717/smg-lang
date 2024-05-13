@@ -7,7 +7,6 @@ import java.util.Date;
 import java.util.HashMap;
 
 import smg.interpreter.Interpreter;
-import smg.interpreter.Parser;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
@@ -54,15 +53,13 @@ public class Main {
 
         intr.setBigDecimalMode(false);
 
-        final Object result = intr.run();
-        System.out.println(result == null ? "" : result);
         try {
+            final Object result = intr.run();
+            System.out.println(result == null ? "" : result);
         }
         catch (Exception e) {
             System.out.println(red(e.getMessage()));
         }
-
-        System.out.println(((Number) 1l).doubleValue() == 1.0D);
     }
 
     private final static String ANSI_RED = "\033[0;31m"; 

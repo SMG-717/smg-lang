@@ -364,12 +364,11 @@ public class Parser {
             NodeTerm right = parseTerm();
 
             while (peek().isAny(TokenType.BinaryArithmetic) && (
-                peek().rassoc ? peek().prec >= op.prec : peek().prec > op.prec
-            )) {
+                (peek().prec > op.prec) || 
+                (peek().prec >= op.prec && peek().rassoc))) {
                 right = new NodeTerm.Expr(
-                    parseExpr(right, peek().prec > op.prec ? 
-                        op.prec + 1 : op.prec
-                ));
+                    parseExpr(right, op.prec + (peek().prec > op.prec ? 1 : 0))
+                );
             }
             left = new NodeTerm.Expr(arthmeticNode(op, left, right));
         }

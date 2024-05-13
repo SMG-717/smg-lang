@@ -8,6 +8,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+/*
+ * Helper functions to simplify type identification and manipulation during run
+ */
 class Types {
     static String javaType(Object object) {
         return object == null ? "null" : object.getClass().getSimpleName();
