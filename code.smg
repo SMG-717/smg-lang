@@ -84,9 +84,9 @@ function fibonacci(n) {
     let a = 0; let b = 1; let c = 0;
     let max = 50
     while (true) {
+        if (c >= n or c > max) { break }
         let temp = a + b
         a = b; b = temp; c += 1
-        if (c >= n or c > max) { break }
     }
 
     return a;
@@ -100,19 +100,19 @@ println()
 
 print("Iterator Function Test -> ")
 function iterate(list) {
-    let i = {idx: 0}
+    let _i = {idx: 0}
     return {
         next: function() {
-            if (i.idx < list.size) {
-                let temp = list[i.idx]
-                i.idx += 1
+            if (_i.idx < list.size) {
+                let temp = list[_i.idx]
+                _i.idx += 1
                 return temp
             }
             else {
                 return null
             }
         },
-        hasNext: function() (i.idx < list.size)
+        hasNext: function() (_i.idx < list.size)
     }
 }
 

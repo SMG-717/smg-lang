@@ -3,6 +3,9 @@ package smg.interpreter;
 import static smg.interpreter.Types.*;
 import static smg.interpreter.Calculations.*;
 
+import smg.interpreter.Capture.F;
+import smg.interpreter.Capture.F0;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,8 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import smg.interpreter.Capture.F;
-import smg.interpreter.Capture.F0;
 
 public class Interpreter {
 
@@ -600,4 +601,3 @@ public class Interpreter {
     }
 
 }
-

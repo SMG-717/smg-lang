@@ -7,7 +7,6 @@ import java.util.Date;
 import java.util.HashMap;
 
 import smg.interpreter.Interpreter;
-import smg.interpreter.Parser;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
@@ -58,8 +57,6 @@ public class Main {
         catch (Exception e) {
             System.out.println(red(e.getMessage()));
         }
-
-        System.out.println(new Parser(code).parse());
     }
 
     private final static String ANSI_RED = "\033[0;31m"; 

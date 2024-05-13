@@ -8,14 +8,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/*
+ * Helper functions to simplify arithmetic during run. All numeric expresssions
+ * are classified into either double or long operations.
+ */
 public class Calculations {
     static Object calcUnary(Interpreter intr, UnaryOp op, Object value) {
         switch (op) {
             case Not: return !(Boolean) castValue(intr, "boolean", value);
             case Negate: {
-                if (of(value, Double.class)) return - (double) value;
-                else if (of(value, Long.class)) return - (long) value;
-                break;
+                if (doublish(value)) return - ((Number) value).doubleValue();
+                else if (longish(value)) return - ((Number) value).longValue();
             }
             default:
         }
@@ -45,7 +48,7 @@ public class Calculations {
             case OrEqual: 
                 return calcBinary(intr, BinaryOp.Or, lhs, rhs);
         }
-        throw intr.error("Unsupported assignment operation: " + op);
+        throw intr.error("Unsupported assignment operation: %s", op);
     }
 
     static Object calcBinaryDouble(

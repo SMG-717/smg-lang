@@ -1,25 +1,42 @@
 package smg.interpreter;
 
 import java.lang.reflect.Field;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Set;
 
 /*
  * Token
  * 
- * A Token is a single coherent ordered sequence of characters. Additional information
- * can be stored in a Token about its type and precedence (if applicable). Tokens
- * that share the same ordered sequence of characters are NOT necessarily identical.
- * They must also share the same type and precedence. Tokens are also immutable.
+ * A Token is a single coherent ordered sequence of characters. Additional info
+ * can be stored in a Token about its type and precedence (if applicable). 
+ * Tokens that share the same ordered sequence of characters are NOT necessarily 
+ * identical. They must also share the same type and precedence. Tokens are 
+ * immutable.
+ * 
+ * Additionally, there are two 'soft' types of Tokens. Tokens that have their
+ * values and types known at compile time are definite tokens. You can find a 
+ * list of them below. Tokens that are not known at compile time have to be 
+ * constructed and instantiated through Token.make().
+ * 
+ * A list of all definite tokens (except EOT) is collected through reflection 
+ * and stored for convenience.
  */
 public class Token {
 
-    final String value;
-    final Set<TokenType> types;
-    final int prec;
-    final boolean rassoc;
+    // Token properties
+    
+    // Type(s) indicate how the token is used
+    final Set<TokenType> types; 
 
+    
+    // String value stores the contents of a token.
+    final String value; 
+    
+    // Associativity and Precedence for binary expressions indicate how to build
+    // those expressions.
+    final boolean rassoc; final int prec; 
+
+    // All definite tokens
     static final Token
     Null = new Token("null", TokenType.Keyword),
     If = new Token("if", TokenType.Keyword),
@@ -70,7 +87,7 @@ public class Token {
     Tilde = new Token("~", TokenType.UnaryArithmetic),
 
     At = new Token("@", TokenType.Punctuation),
-    Underscore = new Token("_", TokenType.Punctuation),
+    // Underscore = new Token("_", TokenType.Punctuation), // Yet to be used.
     Hashtag = new Token("#", TokenType.Punctuation),
     Question = new Token("?", TokenType.Punctuation),
     Comma = new Token(",", TokenType.Punctuation),
@@ -97,21 +114,31 @@ public class Token {
     Tab = new Token("\t", TokenType.WhiteSpace),
     BackSpace = new Token("\b", TokenType.WhiteSpace),
     
-    EqualSign = new Token("=", Set.of(TokenType.Punctuation, TokenType.AssignOperator)),
-    Hyphen = new Token("-", Set.of(TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6),
-    Exclaim = new Token("!", Set.of(TokenType.Punctuation, TokenType.UnaryArithmetic)),
-    SemiColon = new Token(";", Set.of(TokenType.Punctuation, TokenType.StatementTerminator)),
-    CloseCurly = new Token("}", Set.of(TokenType.Punctuation, TokenType.ScopeTerminator)),
-    Newline = new Token("\n", Set.of(TokenType.WhiteSpace, TokenType.StatementTerminator));
+    EqualSign = new Token("=", Set.of(
+        TokenType.Punctuation, TokenType.AssignOperator)),
+    Hyphen = new Token("-", Set.of(
+        TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6),
+    Exclaim = new Token("!", Set.of(
+        TokenType.Punctuation, TokenType.UnaryArithmetic)),
+    SemiColon = new Token(";", Set.of(
+        TokenType.Punctuation, TokenType.StatementTerminator)),
+    CloseCurly = new Token("}", Set.of(
+        TokenType.Punctuation, TokenType.ScopeTerminator)),
+    Newline = new Token("\n", Set.of(
+        TokenType.WhiteSpace, TokenType.StatementTerminator));
 
-    
+    // End of program indicator
     static final char EOF = '\0';
-    public static final Token EOT = new Token("End", Set.of());
-    public static final HashMap<TokenType, Token> tokenMap = new HashMap<>();
+
+    // End of tokens indicator
+    public static final Token EOT = new Token("EOT", Set.of());
+
+    // List of definite tokens for convenience
     public static final LinkedList<Token> tokenList = new LinkedList<>();
 
     static {
         try {
+            // It is built through reflection
             for (Field f : Token.class.getDeclaredFields()) {
                 if (f.getType() == Token.class) {
                     Token t = (Token) f.get(null); 
@@ -120,18 +147,16 @@ public class Token {
                 }
             }
 
+            // And sorted from largest to smallest.
             tokenList.sort((a, b) -> b.value.length() - a.value.length());
-            // System.out.println(tokenList);
         }
-        catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+
+        // Do not allow exceptions to be caught here.
+        catch (Exception e) { throw new RuntimeException(e); }
     }
 
-    private Token(String val, TokenType type) {
-        this(val, type, 0);
-    }
-
+    // Constructors
+    private Token(String val, TokenType type) { this(val, type, 0); }
     private Token(String val, TokenType type, int p, boolean r) {
         this(val, Set.of(type), p, r);
     }
@@ -148,32 +173,23 @@ public class Token {
         this(val, types, p, false);
     }
 
-    private Token(String val, Set<TokenType> types, int p, boolean r) {
-        this.value = val;
-        this.types = Set.copyOf(types);
-        this.prec = p;
-        this.rassoc = r;
-    }
-
-    public boolean hasValue() {
-        return !value.isBlank();
+    private Token(String val, Set<TokenType> ts, int p, boolean r) {
+        value = val; prec = p; rassoc = r; types = Set.copyOf(ts);
     }
 
     static Token make(String name, TokenType type) {
         return new Token(name, type);
     }
 
-    public boolean isAny(TokenType... types) {
-        for (TokenType type : types) {
-            if (this.types.contains(type)) return true;
-        }
+    // HELPERS
+    public boolean hasValue() { return !value.isBlank(); }
+    public boolean isAny(TokenType... ts) {
+        for (TokenType type : ts) if (types.contains(type)) return true;
         return false;
     }
 
-    public boolean isAll(TokenType... types) {
-        for (TokenType type : types) {
-            if (!this.types.contains(type)) return false;
-        }
+    public boolean isAll(TokenType... ts) {
+        for (TokenType type : ts) if (!types.contains(type)) return false;
         return true;
     }
 
@@ -188,18 +204,20 @@ public class Token {
 
     @Override
     public String toString() {
-        
-        return (types.size() > 0 ? types.stream().findFirst().get().toString() : "Special") + "(\"" + unescape(this.value) + "\")";
+        return (
+            types.size() > 0 ? "Special" :
+            types.stream().findFirst().get().toString()
+        ) + "(\"" + unescape(value) + "\")";
     }
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof Token)) {
-            return false;
-        }
-
-        Token token = (Token) other;
-        return this.value.equals(token.value) && this.types.equals(token.types) && this.prec == token.prec;
+        if (!(other instanceof Token)) return false;
+        
+        final Token token = (Token) other;
+        return value.equals(token.value) &&
+            types.equals(token.types) &&
+            prec == token.prec;
     }
 
     @Override
@@ -207,7 +225,4 @@ public class Token {
         // Not sure how collision free this is. -SMG
         return (this.value.hashCode() + this.types.hashCode()) ^ this.prec;
     }
-
-    // Does nothing
-    public static void init() {}
 }
