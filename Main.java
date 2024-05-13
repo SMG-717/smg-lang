@@ -14,8 +14,9 @@ import smg.interpreter.Capture.F0;
 public class Main {
 
     public static void main(String[] args) throws IOException {
-        final Object prog = Parser.parseFile(Paths.get("code.smg"));
-        System.out.println(prog);
+        // final Object prog = Parser.parseFile(Paths.get("code.smg"));
+        // System.out.println(prog);
+        main1();
     }
 
     public static void main1() throws IOException {

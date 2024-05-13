@@ -55,7 +55,7 @@ public class Parser {
 
     // Program -> ([StmtTerm]* [Statement]?)*
     private NodeProgram parseProgram() {
-        final NodeProgram scope = new NodeProgram(new LinkedList<>());
+        final NodeProgram program = new NodeProgram(new LinkedList<>());
         
         do {
             // [StmtTerm]*
@@ -64,10 +64,10 @@ public class Parser {
             // [Statement]?
             NodeStmt stmt;
             if ((stmt = parseStatement()) == null) break;
-            scope.stmts.add(stmt);
+            program.stmts.add(stmt);
         } 
         while (peek() != Token.EOT);
-        return scope;
+        return program;
     }
     
     // MARK: Parse Statement
