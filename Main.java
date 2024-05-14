@@ -13,7 +13,11 @@ import smg.interpreter.Capture.F0;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        System.out.println(new Tokeniser("Whahaha").allTokens());
+        final Tokeniser tokeniser = new Tokeniser("cool");
+        System.out.println(tokeniser);
+        System.out.println(tokeniser.nextToken());
+        System.out.println(tokeniser.nextToken());
+        // System.out.println(new Tokeniser("Whahaha").allTokens());
         // main1();
     }
 

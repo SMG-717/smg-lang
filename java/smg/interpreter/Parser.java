@@ -55,7 +55,7 @@ public class Parser {
 
     // Program -> ([StmtTerm]* [Statement]?)*
     private NodeProgram parseProgram() {
-        final NodeProgram scope = new NodeProgram(new LinkedList<>());
+        final NodeProgram program = new NodeProgram(new LinkedList<>());
         
         do {
             // [StmtTerm]*
@@ -64,10 +64,10 @@ public class Parser {
             // [Statement]?
             NodeStmt stmt;
             if ((stmt = parseStatement()) == null) break;
-            scope.stmts.add(stmt);
+            program.stmts.add(stmt);
         } 
         while (peek() != Token.EOT);
-        return scope;
+        return program;
     }
     
     // MARK: Parse Statement
@@ -316,14 +316,14 @@ public class Parser {
     // MARK: Parse Expression
     private NodeExpr parseExpr() {
         final NodeTerm term;
-        if (peek() == Token.Function) return parseLambda();
+        if (peek() == Token.Function || peek() == Token.Fn) return parseLambda();
         else if ((term = parseTerm()) != null) return parseExpr(term, 0);
         else return null;
     }
 
     private NodeExpr.Lambda parseLambda() {
         final int currentline = line;
-        if (!tryConsume(Token.Function)) return null;
+        if (!tryConsume(Token.Function) && ! tryConsume(Token.Fn)) return null;
         tryConsume(Token.OpenParen, "Expected '('");
         final List<NodeParam> params = new LinkedList<>();
         if (peek() != Token.CloseParen) {

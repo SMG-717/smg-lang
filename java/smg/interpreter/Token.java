@@ -46,6 +46,7 @@ public class Token {
     In = new Token("in", TokenType.Keyword),
     Let = new Token("let", TokenType.Keyword),
     Function = new Token("function", TokenType.Keyword),
+    Fn = new Token("fn", TokenType.Keyword),
     Break = new Token("break", TokenType.Keyword),
     Continue = new Token("continue", TokenType.Keyword),
     Try = new Token("try", TokenType.Keyword),
@@ -205,7 +206,7 @@ public class Token {
     @Override
     public String toString() {
         return (
-            types.size() > 0 ? "Special" :
+            types.size() == 0 ? "Special" :
             types.stream().findFirst().get().toString()
         ) + "(\"" + unescape(value) + "\")";
     }
