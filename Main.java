@@ -7,12 +7,14 @@ import java.util.Date;
 import java.util.HashMap;
 
 import smg.interpreter.Interpreter;
+import smg.interpreter.Tokeniser;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        main1();
+        System.out.println(new Tokeniser("Whahaha").allTokens());
+        // main1();
     }
 
     public static void main1() throws IOException {
