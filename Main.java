@@ -5,20 +5,33 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 
 import smg.interpreter.Interpreter;
-import smg.interpreter.Tokeniser;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        final Tokeniser tokeniser = new Tokeniser("cool");
-        System.out.println(tokeniser);
-        System.out.println(tokeniser.nextToken());
-        System.out.println(tokeniser.nextToken());
-        // System.out.println(new Tokeniser("Whahaha").allTokens());
-        // main1();
+        final String code = String.join("\n", Files.readAllLines(Paths.get("./code.smg")));
+        final Interpreter intr = new Interpreter(code);
+
+        final F println = arg -> { ((F) intr.getVar("print")).apply(arg); System.out.println(); return null; },
+        print = arg -> {
+            if (arg.length != 0) {
+                System.out.print(arg[0]);
+                for (int i = 1; i < arg.length; i += 1) System.out.print(" " + arg[i]);
+            }
+            return null;
+        };
+        
+        // intr.defineVar("println", println);
+        // intr.defineVar("print", print);
+        // intr.integrateClasses(Interpreter.class, Set.class, List.class, LinkedList.class);
+
+        // intr.run();
     }
 
     public static void main1() throws IOException {

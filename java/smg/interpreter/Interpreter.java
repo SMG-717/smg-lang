@@ -6,14 +6,18 @@ import static smg.interpreter.Calculations.*;
 import smg.interpreter.Capture.F;
 import smg.interpreter.Capture.F0;
 
+import java.beans.Expression;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -56,6 +60,9 @@ public class Interpreter {
         program = new Parser(code).parse();
         scopes = new LinkedList<>(List.of(new HashMap<>(vars)));
     }
+    public static Interpreter from(String code) {
+        return new Interpreter(code);
+    }
 
     // MARK: Variables and Scopes
     /**
@@ -87,6 +94,59 @@ public class Interpreter {
     public <T> T getVar(String key) {
         return (T) findVar(key)
             .orElseThrow(() -> error("Variable %s is undefined", key)).get(key);
+    }
+
+    private static Set<String> getMethods(Class<?> c) {
+        final Set<String> methods = new HashSet<>(
+            Arrays.stream(c.getMethods())
+            .map(m -> m.getName())
+            .collect(Collectors.toList())
+        );
+        methods.add("new"); // For constructors!
+        return methods;
+    }
+
+    private F integrateMethod(String name, Class<?> c) {
+        return a -> {
+        try {
+            // If there are no arguments or the first arg is null or the method
+            // is "new" then it is a static call.
+            if (a.length == 0 || a[0] == null || name == "new");
+
+            // Otherwise if the first arg class is a subclass of our class we
+            // attempt an instance method call.
+            else if (c.isAssignableFrom(a[0].getClass())) {
+                final Object[] args = Arrays.copyOfRange(a, 1, a.length);
+                try {
+                    return new Expression(a[0], name,args).getValue();
+                }
+
+                catch (Exception e) {
+                    // Otherwise, or if it does not succeed,
+                    // we attempt a static call.
+                }
+            }
+
+            // Static Call.
+            return new Expression(c, name, a).getValue();
+        }
+
+        // Catch-all error handling. Needs more work to be useful.
+        catch (Exception e) { 
+            e.printStackTrace();
+            throw error( "Invocation error: %s\nMessage: %s", 
+            name, e.getMessage()); 
+        }};
+    }
+    
+    public void integrateClasses(Class<?>... cs) {
+        for (Class<?> c : cs ) {
+            final Map<String, F> fs = new HashMap<>();
+            for (String name : getMethods(c)) 
+                fs.put(name, integrateMethod(name, c));
+
+            getGlobals().put(c.getSimpleName(), fs);
+        }
     }
 
     // Report if a given variable exists.
@@ -295,7 +355,7 @@ public class Interpreter {
             }
         }
 
-        public void visit(NodeStmt.Declare decl) {            
+        public void visit(NodeStmt.Declare decl) {
             final Object value = runExpr(decl.expr);
             defineVar(decl.var, value);
             lastResult = value;

@@ -82,6 +82,7 @@ public class Tokeniser {
 
         // Initial state is waiting
         int state = WAITING;
+        boolean escape = false;
         while (peek() != Token.EOF || buffer.length() > 0) {
             switch (state) {
 
@@ -90,8 +91,32 @@ public class Tokeniser {
                 case D_STR_LIT:
 
                     // Strings must end in the correct token.
-                    if ((state == S_STR_LIT && tryConsume(Token.SingleQuote)) ||
+                    if (escape) {
+                        escape = false;
+                        switch (peek()) {
+                            case '"': buffer.append('"'); break;
+                            case '\\': buffer.append('\\'); break;
+                            case '\'': buffer.append('\''); break;
+                            case 'n': buffer.append('\n'); break;
+                            case 'b': buffer.append('\b'); break;
+                            case 'r': buffer.append('\r'); break;
+                            case 't': buffer.append('\t'); break;
+                            case 'f': buffer.append('\f'); break;
+                            case '0': buffer.append('\0'); break;
+                        
+                            default: throw error(
+                                "Unrecognised escape character: \\%s", peek());
+                        }
+                        consume();
+                        continue;
+                    } 
+                    else if (tryConsume(Token.BackSlash)) {
+                        escape = true;
+                        continue;
+                    }
+                    else if ((state == S_STR_LIT && tryConsume(Token.SingleQuote)) ||
                         (state == D_STR_LIT && tryConsume(Token.DoubleQuote))) {
+
                         final String value = escape(buffer.toString());
                         buffer.setLength(0);
                         return Token.make(value, TokenType.StringLiteral);

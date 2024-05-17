@@ -544,7 +544,7 @@ public class Parser {
         if (tryConsume(Token.CloseParen)) return call;
         
         do {
-            call.args.add(tryParse(parseExpr(), "Expected expression"));
+            call.args.add(tryParse(parseExpr(), "Expected expression, found: " + peek().value));
         } 
         while (tryConsume(Token.Comma));
 
@@ -573,19 +573,21 @@ public class Parser {
     }
     
     private String parseVariable() {
-        return peek().isAny(TokenType.Qualifier) ? consume().value : null;
+        final Token token = tryConsume(TokenType.Qualifier);
+        return token == null ? null : token.value;
     }
     
     // Term.Literal<?>
     private NodeTerm.Literal<?> parseLiteral() {
+        Token token;
         if (tryConsume(Token.Null)) 
             return new NodeTerm.Literal<Void>(null);
-        else if (peek().isAny(TokenType.BooleanLiteral)) 
-            return new NodeTerm.Literal<Boolean>(consume().equals(Token.True));
-        else if (peek().isAny(TokenType.StringLiteral))
-            return new NodeTerm.Literal<String>(consume().value);
-        else if (peek().isAny(TokenType.NumberLiteral)) {
-            final String repr = consume().value;
+        else if ((token = tryConsume(TokenType.BooleanLiteral)) != null) 
+            return new NodeTerm.Literal<Boolean>(token.equals(Token.True));
+        else if ((token = tryConsume(TokenType.StringLiteral)) != null)
+            return new NodeTerm.Literal<String>(token.value);
+        else if ((token = tryConsume(TokenType.NumberLiteral)) != null) {
+            final String repr = token.value;
             try {
                 return new NodeTerm.Literal<Long>(Long.parseLong(repr));
             }
@@ -610,7 +612,8 @@ public class Parser {
     }
     
     private Token consume() {
-        final Token consumable = cache.size() > 0 ? cache.remove(0) : 
+        final Token consumable = cache.size() > 0 ? 
+            cache.remove(0) : 
             tokeniser.nextToken();
 
         if (!consumable.isAny(TokenType.StringLiteral))
