@@ -201,19 +201,17 @@ let bool = true; p(bool); bool |= false; p(bool); bool &= false; p(bool)
 # function(x) function (y) x(y)
 
 # Church Numerals
-let zero = fn(z)fn(s) z
-let one = fn(z)fn(s) s(z)
-let two = fn(z)fn(s) s(s(z))
-let three = fn(z)fn(s) s(s(s(z)))
+let zero = λ (z) λ (s) z
+let one = λ (z) λ (s) s (z)
+let two = λ (z) λ (s) s (s (z))
+let three = λ (z) λ (s) s (s (s (z)))
 
-let view = fn(n) n + 1
+let view = λ (n) n + 1
 
 println("\nLambda Calculus Experiment")
-println(one(0)(view))
-println(two(0)(view))
-println(three(0)(view))
+println(one (0) (view))
+println(two (0) (view))
+println(three (0) (view))
 
-let adder = fn(m)fn(n)fn(z)fn(s) n(m(z)(s))(s)
-print(adder(two)(three)(0)(view))
-
-
+let adder = λ (m) λ (n) λ (z) λ (s) n (m (z) (s)) (s)
+print(adder (two) (three) (0) (view))

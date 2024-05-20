@@ -274,7 +274,7 @@ public class Interpreter {
                 final String slhs = (String) parent;
                 final int i = ((Number) index).intValue();
     
-                final char newChar = (char) castValue(intr, "char", 
+                final char newChar = castValue(intr, "char", 
                     calcAssign(intr, a.op, slhs.charAt(i), runExpr(a.expr)
                 ));
 
@@ -362,7 +362,7 @@ public class Interpreter {
         }
 
         public void visit(NodeStmt.If stmt) {
-            if ((Boolean) castValue(intr, "boolean", runExpr(stmt.expr))) 
+            if ((boolean) castValue(intr, "boolean", runExpr(stmt.expr))) 
                 runScope(stmt.succ);
             else if (stmt.fail != null) 
                 runScope(stmt.fail);
@@ -558,14 +558,10 @@ public class Interpreter {
                 return accessProp(object, (String) i);
             }
             else if (longish(i) && of(object, List.class)) {
-                return ((List<?>) object).get(
-                    (int) (long) castValue(intr, "int", i)
-                );
+                return ((List<?>) object).get(castValue(intr, "int", i));
             }
             else if (longish(i) && of(object, String.class)) {
-                return ((String) object).charAt(
-                    (int) (long) castValue(intr, "int", i)
-                );
+                return ((String) object).charAt(castValue(intr, "int", i));
             }
             
             throw error("Invalid array access '%s'. Index is of type %s", 

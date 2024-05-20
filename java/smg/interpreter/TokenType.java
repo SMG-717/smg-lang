@@ -17,6 +17,7 @@ public enum TokenType {
     NumberLiteral,
     StringLiteral,
     BooleanLiteral,
+    FunctionDecl,
     DateLiteral,
     BinaryArithmetic,
     UnaryArithmetic,

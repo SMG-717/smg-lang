@@ -11,8 +11,8 @@ import java.util.Map;
 /*
  * Helper functions to simplify type identification and manipulation during run
  */
-class Types {
-    static String javaType(Object object) {
+public class Types {
+    public static String javaType(Object object) {
         return object == null ? "null" : object.getClass().getSimpleName();
     }
 
@@ -78,7 +78,14 @@ class Types {
         // Second Sweep
         switch (type) {
             // Numbers
-            case "int": 
+            case "int": {
+                if (of(value, Number.class)) 
+                    return (R) (Integer) ((Number) value).intValue();
+                else if (of(value, String.class)) 
+                    return (R) Integer.valueOf((String) value);
+                break;
+            }
+            
             case "long": {
                 if (of(value, Number.class)) 
                     return (R) (Long) ((Number) value).longValue();
@@ -87,7 +94,14 @@ class Types {
                 break;
             }
             
-            case "float": 
+            case "float": {
+                if (of(value, Number.class)) 
+                    return (R) (Float) ((Number) value).floatValue();
+                else if (of(value, String.class)) 
+                    return (R) Float.valueOf((String) value);
+                break;
+            }
+
             case "double": {
                 if (of(value, Number.class)) 
                     return (R) (Double) ((Number) value).doubleValue();
