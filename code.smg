@@ -102,28 +102,16 @@ print("Iterator Function Test -> ")
 function iterate(list) {
     let _i = {idx: 0}
     return {
-        next: function() {
-            if (_i.idx < list.size) {
-                let temp = list[_i.idx]
-                _i.idx += 1
-                return temp
-            }
-            else {
-                return null
-            }
+        next: fn () {
+            if (_i.idx >= list.size) { return null }
+            _i.idx += 1; return list[_i.idx - 1]
         },
         hasNext: function() (_i.idx < list.size)
     }
 }
 
-let itr = iterate([5, 7, 2, 8, ])
-let n;
+for (let itr = iterate([5, 7, 2, 8,]); itr.hasNext();) { print(itr.next(), "") }
 
-let int_itr = itr
-while (itr.hasNext()) {
-    n = itr.next();
-    print(n, "")
-}
 println()
 
 println("Lambda Tests")
