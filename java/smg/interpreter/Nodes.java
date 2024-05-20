@@ -290,23 +290,23 @@ enum UnaryOp {
     }
 }
 
-interface NodeTerm {
+abstract class NodeTerm {
     public static final NodeTerm NULL = new NodeTerm.Literal<Void>(null);
-    static class Expr implements NodeTerm {
+    static class Expr extends NodeTerm {
         final NodeExpr expr;
         public Expr(NodeExpr e) { expr = e; }
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return String.format("(%s)", expr); }
     }
 
-    static class ArrayLiteral implements NodeTerm {
+    static class ArrayLiteral extends NodeTerm {
         final List<NodeExpr> items;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return String.valueOf(items); } 
         public ArrayLiteral(List<NodeExpr> i) { items = i; }
     }
 
-    static class MapLiteral implements NodeTerm {
+    static class MapLiteral extends NodeTerm {
         final List<NodeMapEntry> items;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { 
@@ -325,14 +325,14 @@ interface NodeTerm {
         public MapLiteral(List<NodeMapEntry> i) { items = i; }
     }
 
-    static class UnaryExpr implements NodeTerm {
+    static class UnaryExpr extends NodeTerm {
         final UnaryOp op; final NodeTerm val;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return String.format("%s%s", op, val); }
         UnaryExpr(UnaryOp o, NodeTerm v) { op = o; val = v; }
     }
 
-    static class ArrayAccess implements NodeTerm {
+    static class ArrayAccess extends NodeTerm {
         final NodeTerm array; final NodeExpr index;
         public <R> R host(Visitor v) { return v.visit(this); } 
         public String toString() { 
@@ -341,21 +341,21 @@ interface NodeTerm {
         public ArrayAccess(NodeTerm a, NodeExpr i) { array = a; index = i; }
     }
     
-    static class Variable implements NodeTerm {
+    static class Variable extends NodeTerm {
         public final String var;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { return var; } 
         public Variable(String v) { this.var = v; }
     }
     
-    static class PropAccess implements NodeTerm {
+    static class PropAccess extends NodeTerm {
         final NodeTerm object; final String prop;
         public <R> R host(Visitor visitor) { return visitor.visit(this); }
         public String toString() { return object.toString() + "." + prop; } 
         public PropAccess(NodeTerm o, String p) { object = o; prop = p; }
     }
 
-    static class Literal<T> implements NodeTerm {
+    static class Literal<T> extends NodeTerm {
         final T lit;
         @SuppressWarnings("unchecked")
         public T host(Visitor v) { return v.visit(this); }
@@ -370,7 +370,7 @@ interface NodeTerm {
         public Literal(T l) { lit = l; }
     }
     
-    static class Call implements NodeTerm {
+    static class Call extends NodeTerm {
         final NodeTerm f; final List<NodeExpr> args;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { 
@@ -382,7 +382,7 @@ interface NodeTerm {
         public Call(NodeTerm t, List<NodeExpr> e) { f = t; args = e; }
     }
 
-    static class Cast implements NodeTerm {
+    static class Cast extends NodeTerm {
         final NodeTerm object; final NodeType type;
         public <R> R host(Visitor v) { return v.visit(this); }
         public String toString() { 
@@ -391,8 +391,8 @@ interface NodeTerm {
         public Cast(NodeTerm o, NodeType t) { object = o; type = t; }
     }
 
-    public String toString();
-    <R> R host(Visitor term);
+    abstract public String toString();
+    abstract <R> R host(Visitor term);
     interface Visitor {
         <R> R visit(Expr expr);
         <R> R visit(ArrayLiteral arr);
