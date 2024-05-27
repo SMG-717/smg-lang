@@ -201,19 +201,34 @@ let bool = true; p(bool); bool |= false; p(bool); bool &= false; p(bool)
 # function(x) function (y) x(y)
 
 # Church Numerals
-let zero = fn(z)fn(s) z
-let one = fn(z)fn(s) s(z)
-let two = fn(z)fn(s) s(s(z))
-let three = fn(z)fn(s) s(s(s(z)))
+let zero = fn (f) fn (x) x
+let one = fn (f) fn (x) f (x)
+let two = fn (f) fn (x) f (f (x))
+let three = fn (f) fn (x) f (f (f (x)))
 
-let view = fn(n) n + 1
+let succ = fn (n) fn (f) fn (x) f (n (f) (x))
+let four = succ (three)
+let five = succ (four)
+let six = succ (five)
+let seven = succ (six)
+let eight = succ (seven)
+let nine = succ (eight)
 
+let add = fn (m) fn (n) fn (f) fn (x) m (f) (n (f) (x))
+let mult = fn (m) fn (n) m (add (n)) (zero)
+let exp = fn (b) fn (e) e (b)
+
+let view = fn (n) n (fn (x) x + 1) (0)
 println("\nLambda Calculus Experiment")
-println(one(0)(view))
-println(two(0)(view))
-println(three(0)(view))
+println("one =", view (one))
+println("two =", view (two))
+println("three =", view (three))
+println("four =", view (four))
+println("four + three =", view (add (four) (three)))
+println("four * three =", view (mult (four) (three)))
+println("four ^ three =", view (exp (four) (three)))
 
-let adder = fn(m)fn(n)fn(z)fn(s) n(m(z)(s))(s)
-print(adder(two)(three)(0)(view))
+# let adder = fn (m) fn (n) fn (z) fn (s) n(m(z)(s))(s)
+# print(adder(two)(three)(0)(view))
 
 
