@@ -28,13 +28,20 @@ public class Token {
     // Type(s) indicate how the token is used
     final Set<TokenType> types; 
 
-    
     // String value stores the contents of a token.
     final String value; 
-    
+
     // Associativity and Precedence for binary expressions indicate how to build
     // those expressions.
     final boolean rassoc; final int prec; 
+
+    // Compound Token Types
+    final static Set<TokenType> 
+    binword = Set.of(TokenType.BinaryArithmetic, TokenType.Keyword),
+    unword = Set.of(TokenType.UnaryArithmetic, TokenType.Keyword),
+    funcDecl = Set.of(TokenType.FunctionDecl, TokenType.Keyword),
+    boolword = Set.of(TokenType.BooleanLiteral, TokenType.Keyword),
+    castword = Set.of(TokenType.CastType, TokenType.Keyword);
 
     // All definite tokens
     static final Token
@@ -45,8 +52,6 @@ public class Token {
     For = new Token("for", TokenType.Keyword),
     In = new Token("in", TokenType.Keyword),
     Let = new Token("let", TokenType.Keyword),
-    Function = new Token("function", TokenType.Keyword),
-    Fn = new Token("fn", TokenType.Keyword),
     Break = new Token("break", TokenType.Keyword),
     Continue = new Token("continue", TokenType.Keyword),
     Try = new Token("try", TokenType.Keyword),
@@ -54,18 +59,21 @@ public class Token {
     Finally = new Token("finally", TokenType.Keyword),
     Return = new Token("return", TokenType.Keyword),
     As = new Token("as", TokenType.Keyword),
-    True = new Token("true", Set.of(TokenType.BooleanLiteral, TokenType.Keyword)),
-    False = new Token("false", Set.of(TokenType.BooleanLiteral, TokenType.Keyword)),
+    Function = new Token("function", funcDecl),
+    Fn = new Token("fn", funcDecl),
+    Lambda = new Token("λ", funcDecl),
+    True = new Token("true", boolword),
+    False = new Token("false", boolword),
 
-    Int = new Token("int", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Long = new Token("long", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Double = new Token("double", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Float = new Token("float", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Character = new Token("char", Set.of(TokenType.CastType, TokenType.Keyword)),
-    String = new Token("string", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Boolean = new Token("boolean", Set.of(TokenType.CastType, TokenType.Keyword)),
-    Date = new Token("date", Set.of(TokenType.CastType, TokenType.Keyword)),
-    
+    Int = new Token("int", castword),
+    Long = new Token("long", castword),
+    Double = new Token("double", castword),
+    Float = new Token("float", castword),
+    Character = new Token("char", castword),
+    String = new Token("string", castword),
+    Boolean = new Token("boolean", castword),
+    Date = new Token("date", castword),
+
     Caret = new Token("^", TokenType.BinaryArithmetic, 8, true),
     Asterisk = new Token("*", TokenType.BinaryArithmetic, 7),
     ForwardSlash = new Token("/", TokenType.BinaryArithmetic, 7),
@@ -81,14 +89,15 @@ public class Token {
     NotEquals = new Token("!=", TokenType.BinaryArithmetic, 3),
     Ampersand = new Token("&", TokenType.BinaryArithmetic, 2),
     Pipe = new Token("|", TokenType.BinaryArithmetic, 2),
-    Xor = new Token("xor", Set.of(TokenType.BinaryArithmetic, TokenType.Keyword), 2),
-    And = new Token("and", Set.of(TokenType.BinaryArithmetic, TokenType.Keyword), 1),
-    Or = new Token("or", Set.of(TokenType.BinaryArithmetic, TokenType.Keyword), 1),
-    Not = new Token("not", Set.of(TokenType.UnaryArithmetic, TokenType.Keyword)),
     Tilde = new Token("~", TokenType.UnaryArithmetic),
+    Exclaim = new Token("!", TokenType.UnaryArithmetic),
+
+    Xor = new Token("xor", binword, 2),
+    And = new Token("and", binword, 1),
+    Or = new Token("or", binword, 1),
+    Not = new Token("not", unword),
 
     At = new Token("@", TokenType.Punctuation),
-    // Underscore = new Token("_", TokenType.Punctuation), // Yet to be used.
     Hashtag = new Token("#", TokenType.Punctuation),
     Question = new Token("?", TokenType.Punctuation),
     Comma = new Token(",", TokenType.Punctuation),
@@ -102,7 +111,8 @@ public class Token {
     CloseSquare = new Token("]", TokenType.Punctuation),
     DoubleQuote = new Token("\"", TokenType.Punctuation),
     SingleQuote = new Token("\'", TokenType.Punctuation),
-    
+
+    EqualSign = new Token("=", TokenType.AssignOperator),
     PlusEqual = new Token("+=", TokenType.AssignOperator),
     MultiplyEqual = new Token("*=", TokenType.AssignOperator),
     SubtractEqual = new Token("-=", TokenType.AssignOperator),
@@ -110,23 +120,24 @@ public class Token {
     ModEqual = new Token("%=", TokenType.AssignOperator),
     AndEqual = new Token("&=", TokenType.AssignOperator),
     OrEqual = new Token("|=", TokenType.AssignOperator),
-    
+
     CarriageReturn = new Token("\r", TokenType.WhiteSpace),
     Tab = new Token("\t", TokenType.WhiteSpace),
     BackSpace = new Token("\b", TokenType.WhiteSpace),
     
-    EqualSign = new Token("=", Set.of(
-        TokenType.Punctuation, TokenType.AssignOperator)),
+    SemiColon = new Token(";", TokenType.StatementTerminator),
+    CloseCurly = new Token("}", TokenType.ScopeTerminator),
+    
+    // Unary for negation, Binary for subtraction
     Hyphen = new Token("-", Set.of(
-        TokenType.BinaryArithmetic, TokenType.UnaryArithmetic), 6),
-    Exclaim = new Token("!", Set.of(
-        TokenType.Punctuation, TokenType.UnaryArithmetic)),
-    SemiColon = new Token(";", Set.of(
-        TokenType.Punctuation, TokenType.StatementTerminator)),
-    CloseCurly = new Token("}", Set.of(
-        TokenType.Punctuation, TokenType.ScopeTerminator)),
+        TokenType.BinaryArithmetic, 
+        TokenType.UnaryArithmetic
+    ), 6),
+
     Newline = new Token("\n", Set.of(
-        TokenType.WhiteSpace, TokenType.StatementTerminator));
+        TokenType.WhiteSpace, 
+        TokenType.StatementTerminator
+    ));
 
     // End of program indicator
     static final char EOF = '\0';

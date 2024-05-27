@@ -27,11 +27,11 @@ public class Main {
             return null;
         };
         
-        // intr.defineVar("println", println);
-        // intr.defineVar("print", print);
-        // intr.integrateClasses(Interpreter.class, Set.class, List.class, LinkedList.class);
+        intr.defineVar("println", println);
+        intr.defineVar("print", print);
+        intr.integrateClasses(Interpreter.class, Set.class, List.class, LinkedList.class);
 
-        // intr.run();
+        intr.run();
     }
 
     public static void main1() throws IOException {
