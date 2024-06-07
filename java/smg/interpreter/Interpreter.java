@@ -530,25 +530,22 @@ public class Interpreter {
         public Object visit(NodeTerm.Variable var) { 
             return getVar(var.var);
         }
-        
+
         public Object visit(NodeTerm.PropAccess paccess) {
             final Object object = runTerm(paccess.object);
             return accessProp(object, paccess.prop);
         }
 
         public Object visit(NodeTerm.ArrayLiteral arr) {
-            return new ArrayList<>(
-                arr.items.stream()
-                .map(e -> runExpr(e))
-                .collect(Collectors.toList())
-            );
+            final List<Object> items = new ArrayList<>(arr.items.size());
+            for (var expr : arr.items) items.add(runExpr(expr));
+            return items;
         }
 
         public Object visit(NodeTerm.MapLiteral map) {
-            return new HashMap<>(
-                map.items.stream()
-                .collect(Collectors.toMap(e -> e.key, e -> runExpr(e.value)))
-            );
+            final Map<String, Object> values = new HashMap<>(map.items.size());
+            for (var e : map.items) values.put(e.key, runExpr(e.value));
+            return values;
         }
 
         public Object visit(NodeTerm.ArrayAccess access) {
